@@ -2,9 +2,9 @@
 // runes so any component can raise a toast or ask a question without prop drilling.
 
 import { listen } from '@tauri-apps/api/event';
-import { invalidateAll } from '$app/navigation';
+import { goto, invalidateAll } from '$app/navigation';
 import { api } from './api';
-import type { SyncStatus } from './types';
+import type { ScreenshotResult, SyncStatus } from './types';
 
 // ---- toasts -----------------------------------------------------------------------------------------
 
@@ -136,6 +136,16 @@ export function startBackendEvents(): () => void {
 	listen('vault-changed', () => {
 		void refresh();
 	})
+		.then(keep)
+		.catch(() => {});
+
+	// A screenshot was taken and uploaded: the main window opens it. A failure is said out loud.
+	listen<ScreenshotResult>('screenshot-ready', (event) => {
+		void goto(`/screenshot?url=${encodeURIComponent(event.payload.url)}`);
+	})
+		.then(keep)
+		.catch(() => {});
+	listen<string>('screenshot-error', (event) => toast(event.payload, true))
 		.then(keep)
 		.catch(() => {});
 

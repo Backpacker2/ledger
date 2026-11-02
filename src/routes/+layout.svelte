@@ -2,6 +2,7 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
+	import { page } from '$app/state';
 	import Dialogs from '$lib/components/Dialogs.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Toasts from '$lib/components/Toasts.svelte';
@@ -10,12 +11,19 @@
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
+	// The screenshot overlay is a window of its own and shows no app chrome.
+	const bare = $derived(page.url.pathname.startsWith('/screenshot-overlay'));
+
 	onMount(() => {
+		if (bare) return;
 		initTheme();
 		return startBackendEvents();
 	});
 </script>
 
+{#if bare}
+	{@render children()}
+{:else}
 <div class="app">
 	<header class="topbar">
 		<button class="icon-btn" aria-label="Menu" onclick={() => (drawer.open = true)}>☰</button>
@@ -30,3 +38,4 @@
 
 <Dialogs />
 <Toasts />
+{/if}

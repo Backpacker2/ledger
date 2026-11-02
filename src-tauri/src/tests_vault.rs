@@ -430,7 +430,9 @@ fn the_vault_location_is_remembered_in_the_app_config() {
     if std::env::var_os("LEDGER_VAULT").is_none() {
         assert_eq!((path, locked), (docs.path().join("Ledger"), false));
         let chosen = config.path().join("elsewhere");
-        settings::save_config(config.path(), &settings::AppConfig { vault_path: Some(chosen.display().to_string()) }).unwrap();
+        settings::update_config(config.path(), |c| c.vault_path = Some(chosen.display().to_string())).unwrap();
+        settings::update_config(config.path(), |c| c.screenshot_hotkey = Some("Alt+F9".into())).unwrap();
+        assert_eq!(settings::load_config(config.path()).vault_path.as_deref(), Some(chosen.to_str().unwrap()), "other settings survive an update");
         assert_eq!(settings::resolve_vault(config.path(), None).0, chosen);
     }
 }

@@ -5,12 +5,13 @@
 use std::path::PathBuf;
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 use crate::error::{Error, Result};
 use crate::github::GithubRemote;
 use crate::models::*;
 use crate::posts::AddOptions;
+use crate::screenshot::{self, Region, ScreenshotSettings};
 use crate::settings::{self, SyncConfig, SyncEnv};
 use crate::state::App;
 use crate::syncer::SyncStatus;
@@ -220,6 +221,7 @@ pub struct SettingsView {
     pub version: String,
     pub sync: SyncSettings,
     pub status: SyncStatus,
+    pub screenshot: ScreenshotSettings,
 }
 
 fn view(app: &App) -> SettingsView {
@@ -247,6 +249,7 @@ fn view(app: &App) -> SettingsView {
             branch: env.branch,
         },
         status: app.syncer.status(),
+        screenshot: app.screenshots.settings(),
     }
 }
 
@@ -351,6 +354,60 @@ pub fn set_vault_path(app: State<App>, path: String, copy: bool) -> Result<Setti
     };
     app.syncer.reconfigure(config.as_ref());
     Ok(view(&app))
+}
+
+// ---- screenshots ------------------------------------------------------------------------------------
+
+/// Saves the screenshot hotkey and upload URL. The hotkey is registered first, replacing the old one live; if the
+/// system refuses it nothing is saved and the old one keeps working.
+#[tauri::command]
+pub fn save_screenshot_settings(app: AppHandle, hotkey: String, upload_url: String) -> Result<SettingsView> {
+    let url = upload_url.trim().to_string();
+    if !url.is_empty() && !reqwest::Url::parse(&url).is_ok_and(|u| matches!(u.scheme(), "http" | "https")) {
+        return Err(Error::invalid("The upload URL must start with http:// or https://"));
+    }
+    screenshot::apply_hotkey(&app, &hotkey)?;
+
+    let state = app.state::<App>();
+    let config_dir = state.lock().config_dir.clone();
+    settings::update_config(&config_dir, |config| {
+        config.screenshot_hotkey = Some(hotkey.trim().to_string());
+        config.screenshot_upload_url = Some(url).filter(|u| !u.is_empty());
+    })?;
+    Ok(view(&state))
+}
+
+/// Takes a screenshot as if the hotkey had been pressed.
+#[tauri::command]
+pub fn take_screenshot(app: AppHandle) {
+    screenshot::trigger(&app);
+}
+
+/// Lets go of the hotkey while the settings screen records a new one (and takes it back afterwards).
+#[tauri::command]
+pub fn pause_screenshot_hotkey(app: AppHandle, paused: bool) {
+    screenshot::pause_hotkey(&app, paused);
+}
+
+/// The overlay's picture of the screen, as raw PNG bytes.
+#[tauri::command]
+pub fn screenshot_image(app: AppHandle) -> Result<tauri::ipc::Response> {
+    Ok(tauri::ipc::Response::new(screenshot::overlay_image(&app)?))
+}
+
+#[tauri::command]
+pub fn screenshot_overlay_ready(app: AppHandle) {
+    screenshot::overlay_ready(&app);
+}
+
+#[tauri::command]
+pub fn screenshot_finish(app: AppHandle, region: Region) -> Result<()> {
+    screenshot::finish(&app, region)
+}
+
+#[tauri::command]
+pub fn screenshot_cancel(app: AppHandle) {
+    screenshot::cancel(&app);
 }
 
 /// Reads the vault in again from its files.

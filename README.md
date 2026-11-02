@@ -58,9 +58,22 @@ Use a [fine-grained token](https://github.com/settings/personal-access-tokens/ne
 - **Documents** — drafted in a markdown editor with live preview and autosave. Starting a document in a thread seeds the type's guiding questions into it as posts (a one-time snapshot); replies to a question are shown inside its card. **Publish** a version (minor, major or a custom `M.m`) to freeze an immutable snapshot, which also drops a note in the thread that links back to it. A document can be created unlinked and given a thread later with *Start drafting*.
 - **User stories** — an id you choose (`MM01`), a summary, "As a / I want to / Such that", and acceptance criteria you tick off. A story links to any number of threads.
 - **Planboard** — one board with customisable columns (Backlog → Drafting → Documented by default). Drag a card, or use its arrows, to change column. A column that still holds stories can't be deleted.
+- **Screenshots** — press a global hotkey (default Ctrl/⌘+Shift+S) anywhere: the screen under the cursor is captured, a full-screen overlay lets you drag out a region, and the cropped PNG is uploaded to an endpoint you configure, then opened in Ledger. See below.
 - **Search** across every post and document, with highlighted snippets. **Themes**: Dark, Night, Forest, Ocean, Sepia, Light.
 
 Deleting a thread keeps its documents (unlinked) and its stories (just unlinked from it); deleting a document keeps its published versions readable; a document type can't be deleted while documents use it.
+
+## Screenshots
+
+**Settings → Screenshots** holds the hotkey and the upload URL. Both are per-machine (stored in the app's config folder, not in the vault, so they aren't synced). The hotkey is set with a key recorder, checked (it needs a modifier, and the system's own shortcuts are refused) and registered immediately, replacing the old one without a restart; if the system won't register it (usually because another program owns it) you get a warning and the old shortcut keeps working.
+
+The flow: the hotkey captures the monitor under the cursor ([xcap](https://crates.io/crates/xcap)); a frameless, always-on-top window shows the capture so you can drag out a region (Esc or a right-click cancels); the backend crops it — scaling the drag from window units to capture pixels, so HiDPI screens come out exact — encodes a PNG and POSTs it as a multipart form (field `file`) to the upload URL. The answer should be JSON with the image's link in `url` (`link` and `data.url` also work), or just the link. Ledger then emits `screenshot-ready`, brings its main window forward and opens the screenshot. Failures (no URL set, the endpoint down, a missing permission) are shown the same way.
+
+Platforms:
+
+- **Windows, Linux (X11)** — as above.
+- **macOS** needs the Screen Recording permission. Ledger checks it before capturing, triggers the system prompt the first time, and otherwise says where to switch it on (System Settings → Privacy & Security → Screen & System Audio Recording; Ledger must be restarted afterwards). A transparent overlay window needs Tauri's `macos-private-api`, which isn't enabled; the overlay is opaque (it shows the capture anyway).
+- **Linux under Wayland** can't capture the screen or grab a key directly, so Ledger asks the XDG desktop portals ([ashpd](https://crates.io/crates/ashpd)): the compositor's own area picker replaces the overlay, and the hotkey is bound through the global-shortcuts portal. If the desktop doesn't offer that portal, Settings says so and the *Take a screenshot now* button still works.
 
 ## Running it
 
@@ -79,7 +92,7 @@ npm test               # Rust: stores, vault round-trips, and the sync algorithm
 npm run check          # Svelte + TypeScript
 ```
 
-Environment variables, mostly for development: `LEDGER_VAULT` fixes the vault location (and locks it in Settings); `LEDGER_GITHUB_API` points the sync at another API base (GitHub Enterprise, or a mock).
+Environment variables, mostly for development: `LEDGER_VAULT` fixes the vault location (and locks it in Settings); `LEDGER_CONFIG_DIR` moves the per-machine settings (vault location, screenshot hotkey and URL); `LEDGER_GITHUB_API` points the sync at another API base (GitHub Enterprise, or a mock); `LEDGER_SCREENSHOT_URL` fixes the screenshot upload URL (and locks it in Settings).
 
 ## Layout
 
@@ -88,7 +101,8 @@ src/                     SvelteKit frontend (static SPA)
   routes/                threads/[slug], documents, document-types, planboard, search, settings
   lib/api.ts             typed wrappers over the Tauri commands
   lib/ui.svelte.ts       toasts, dialogs, theme, and the backend's sync/vault events
-  lib/components/        sidebar, post card, composer, story modal, dialogs …
+  lib/components/        sidebar, post card, composer, story modal, dialogs, hotkey recorder …
+  routes/screenshot-overlay  the full-screen region picker (its own window)
 src-tauri/src/
   schema.sql             the in-memory database's shape and rules
   threads.rs posts.rs documents.rs document_types.rs stories.rs planboard.rs search.rs
@@ -98,6 +112,7 @@ src-tauri/src/
   sync.rs                the three-way reconcile, behind a `Remote` trait
   github.rs              the GitHub REST implementation of `Remote`
   syncer.rs              the background worker: debounce, poll, retry, status events
+  screenshot.rs          hotkey registration, capture, the overlay window, crop, upload; Wayland portals
   state.rs commands.rs   the running app and the thin Tauri command layer
   markdown.rs            markdown → HTML; raw HTML is escaped and unsafe link targets dropped
   tests*.rs              behaviour tests

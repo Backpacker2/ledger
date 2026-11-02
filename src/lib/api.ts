@@ -7,6 +7,7 @@ import type {
 	DocumentView,
 	Planboard,
 	Post,
+	Region,
 	SearchHit,
 	Story,
 	StoryDraft,
@@ -92,5 +93,16 @@ export const api = {
 	syncNow: () => call<void>('sync_now'),
 	setVaultPath: (path: string, copy: boolean) => call<Settings>('set_vault_path', { path, copy }),
 	reloadVault: () => call<void>('reload_vault'),
-	checkVaultChanges: () => call<boolean>('check_vault_changes')
+	checkVaultChanges: () => call<boolean>('check_vault_changes'),
+
+	// screenshots
+	saveScreenshotSettings: (hotkey: string, uploadUrl: string) =>
+		call<Settings>('save_screenshot_settings', { hotkey, uploadUrl }),
+	takeScreenshot: () => call<void>('take_screenshot'),
+	/** Lets go of the hotkey while it is being re-recorded, and takes it back afterwards. */
+	pauseScreenshotHotkey: (paused: boolean) => call<void>('pause_screenshot_hotkey', { paused }),
+	screenshotImage: () => call<ArrayBuffer>('screenshot_image'),
+	screenshotOverlayReady: () => call<void>('screenshot_overlay_ready'),
+	screenshotFinish: (region: Region) => call<void>('screenshot_finish', { region }),
+	screenshotCancel: () => call<void>('screenshot_cancel')
 };

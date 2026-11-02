@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { openUrl } from '@tauri-apps/plugin-opener';
+	import HotkeyInput from '$lib/components/HotkeyInput.svelte';
 	import { api } from '$lib/api';
 	import { ago, dateTime } from '$lib/format';
 	import { attempt, confirmDialog, refresh, setTheme, sync, theme, themes, toast } from '$lib/ui.svelte';
@@ -13,7 +14,8 @@
 
 	/** The form's starting values, read once; edits stay local until saved. */
 	function start() {
-		return { repo: data.settings.sync.repo, branch: data.settings.sync.branch || 'main', path: data.settings.vaultPath };
+		const { sync, vaultPath, screenshot } = data.settings;
+		return { repo: sync.repo, branch: sync.branch || 'main', path: vaultPath, hotkey: screenshot.hotkey, uploadUrl: screenshot.uploadUrl };
 	}
 	const initial = start();
 
@@ -22,7 +24,10 @@
 	let token = $state('');
 	let vaultInput = $state(initial.path);
 	let copy = $state(true);
-	let busy = $state<'test' | 'save' | 'vault' | null>(null);
+	let hotkey = $state(initial.hotkey);
+	let uploadUrl = $state(initial.uploadUrl);
+	let shotError = $state<string | null>(null);
+	let busy = $state<'test' | 'save' | 'vault' | 'shot' | null>(null);
 	let result = $state<{ ok: boolean; message: string } | null>(null);
 
 	const vaultChanged = $derived(vaultInput.trim() !== '' && vaultInput.trim() !== settings.vaultPath);
@@ -99,6 +104,25 @@
 			result = null;
 			await refresh();
 		}
+	}
+
+	// ---- screenshots ---------------------------------------------------------------------------
+
+	const screenshot = $derived(settings.screenshot);
+	const shotChanged = $derived(hotkey !== screenshot.hotkey || uploadUrl.trim() !== screenshot.uploadUrl);
+
+	async function saveScreenshot() {
+		busy = 'shot';
+		shotError = null;
+		try {
+			await api.saveScreenshotSettings(hotkey, uploadUrl);
+			toast('Screenshot settings saved');
+			await refresh();
+		} catch (e) {
+			// A shortcut the system refuses stays on screen as a warning; the previous one keeps working.
+			shotError = e instanceof Error ? e.message : String(e);
+		}
+		busy = null;
 	}
 
 	const stateText = $derived.by(() => {
@@ -234,6 +258,47 @@ planboard.md                         the columns</pre>
 						<button class="btn small ghost danger" onclick={disconnect}>Turn off sync</button>
 					</div>
 				{/if}
+			</div>
+		</div>
+
+		<div class="panel">
+			<h2>Screenshots</h2>
+			<p class="sub" style="margin:0">
+				Press the shortcut anywhere to capture the screen you're on, drag out the area you want, and the picture is uploaded and opened here.
+			</p>
+			<div class="form-row">
+				<div class="field grow">
+					Screenshot hotkey
+					<HotkeyInput bind:value={hotkey} onrecording={(on) => api.pauseScreenshotHotkey(on).catch(() => {})} />
+				</div>
+				<button class="btn ghost" onclick={() => (hotkey = screenshot.defaultHotkey)} disabled={hotkey === screenshot.defaultHotkey}>
+					Reset to default
+				</button>
+			</div>
+			<label class="field">
+				Upload URL
+				<input
+					bind:value={uploadUrl}
+					disabled={screenshot.uploadUrlLocked}
+					placeholder="https://example.com/upload"
+					spellcheck="false"
+					autocomplete="off"
+				/>
+			</label>
+			<div class="hint">
+				The image is sent as a multipart form (field <code>file</code>, a PNG). The answer should be JSON with the image's link in
+				<code>url</code>, or just the link.
+				{#if screenshot.uploadUrlLocked}The address is fixed by <code>LEDGER_SCREENSHOT_URL</code>.{/if}
+			</div>
+			{#if shotError}
+				<div class="notice bad">{shotError}</div>
+			{:else if screenshot.problem}
+				<div class="notice">{screenshot.problem}</div>
+			{/if}
+			{#if screenshot.note}<div class="notice info">{screenshot.note}</div>{/if}
+			<div class="row-end" style="justify-content:flex-start">
+				<button class="btn primary" onclick={saveScreenshot} disabled={busy !== null || !shotChanged || !hotkey}>Save</button>
+				<button class="btn" onclick={() => api.takeScreenshot()} disabled={shotChanged}>Take a screenshot now</button>
 			</div>
 		</div>
 

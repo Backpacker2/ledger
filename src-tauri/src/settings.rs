@@ -26,10 +26,13 @@ const DEFAULT_GITIGNORE: &str = "\
 
 // ---- the app's own config ---------------------------------------------------------------------------
 
+/// Per-machine settings that live outside the vault, so they are never synced to other machines.
 #[derive(Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct AppConfig {
     pub vault_path: Option<String>,
+    pub screenshot_hotkey: Option<String>,
+    pub screenshot_upload_url: Option<String>,
 }
 
 fn config_file(dir: &Path) -> PathBuf {
@@ -45,6 +48,13 @@ pub fn save_config(dir: &Path, config: &AppConfig) -> Result<()> {
     let file = config_file(dir);
     let text = serde_json::to_string_pretty(config).unwrap_or_default();
     fs::write(&file, text).map_err(|e| Error::io(&file, e))
+}
+
+/// Changes some settings and leaves the others as they were.
+pub fn update_config(dir: &Path, change: impl FnOnce(&mut AppConfig)) -> Result<()> {
+    let mut config = load_config(dir);
+    change(&mut config);
+    save_config(dir, &config)
 }
 
 /// Where the vault is: `LEDGER_VAULT` if set (and then not changeable from the UI), else the folder chosen in

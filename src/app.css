@@ -172,6 +172,8 @@ select { color: var(--ink); background: var(--bg); border: 1px solid var(--line)
 .notice { background: var(--amber-soft); color: var(--amber); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
 .notice.info { background: var(--accent-soft); color: var(--muted); }
 .notice a { color: inherit; font-weight: 600; }
+input.hotkey { cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; caret-color: transparent; }
+input.hotkey.recording { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .notice.ok { background: var(--green-soft); color: var(--green); }
 .notice.bad { background: var(--red-soft); color: var(--red); }
 .error-text { color: var(--red); }
@@ -401,3 +403,8 @@ mark { background: rgba(224, 166, 69, 0.35); color: inherit; border-radius: 3px;
 	.story-row { grid-template-columns: 60px 1fr auto; }
 	.story-row .k-meta { display: none; }
 }
+
+/* ---------- screenshots ---------- */
+.shot-view { display: flex; flex-direction: column; gap: 14px; }
+.shot-view img { max-width: 100%; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card-2); align-self: flex-start; }
+.link-box { flex: 1; min-width: 240px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }

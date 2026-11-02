@@ -134,6 +134,33 @@ export interface SyncSettings {
 	configured: boolean;
 }
 
+export interface ScreenshotSettings {
+	hotkey: string;
+	defaultHotkey: string;
+	uploadUrl: string;
+	/** Fixed by the LEDGER_SCREENSHOT_URL environment variable. */
+	uploadUrlLocked: boolean;
+	/** Why the saved hotkey isn't working, if it isn't. */
+	problem: string | null;
+	/** Something about this platform worth knowing (a missing permission, Wayland). */
+	note: string | null;
+}
+
+/** A dragged rectangle, in the capture's own pixels. */
+export interface Region {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/** The payload of the `screenshot-ready` event. */
+export interface ScreenshotResult {
+	url: string;
+	width: number;
+	height: number;
+}
+
 export interface Settings {
 	vaultPath: string;
 	/** Fixed by the LEDGER_VAULT environment variable. */
@@ -142,6 +169,7 @@ export interface Settings {
 	version: string;
 	sync: SyncSettings;
 	status: SyncStatus;
+	screenshot: ScreenshotSettings;
 }
 
 export interface StoryDraft {

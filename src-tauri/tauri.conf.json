@@ -25,14 +25,14 @@
         "default-src": "'self'",
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
-        "img-src": "'self' data: https:",
+        "img-src": "'self' data: blob: http: https:",
         "connect-src": "ipc: http://ipc.localhost"
       },
       "devCsp": {
         "default-src": "'self'",
         "script-src": "'self' 'unsafe-inline'",
         "style-src": "'self' 'unsafe-inline'",
-        "img-src": "'self' data: https:",
+        "img-src": "'self' data: blob: http: https:",
         "connect-src": "ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420"
       }
     }

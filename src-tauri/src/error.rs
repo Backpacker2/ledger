@@ -13,6 +13,8 @@ pub enum Error {
     Sync(String),
     /// GitHub moved on while a push was being prepared; the sync starts over from the new state.
     Rejected,
+    /// Taking or delivering a screenshot went wrong.
+    Screenshot(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -30,6 +32,10 @@ impl Error {
         Error::Sync(message.into())
     }
 
+    pub fn screenshot(message: impl std::fmt::Display) -> Self {
+        Error::Screenshot(message.to_string())
+    }
+
     /// An I/O failure with the path it happened on.
     pub fn io(path: &std::path::Path, e: std::io::Error) -> Self {
         Error::Io(format!("{}: {e}", path.display()))
@@ -39,7 +45,7 @@ impl Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Invalid(message) | Error::NotFound(message) | Error::Sync(message) => f.write_str(message),
+            Error::Invalid(message) | Error::NotFound(message) | Error::Sync(message) | Error::Screenshot(message) => f.write_str(message),
             Error::Db(e) => write!(f, "Database error: {e}"),
             Error::Io(message) => write!(f, "Vault error: {message}"),
             Error::Rejected => f.write_str("GitHub changed while syncing"),

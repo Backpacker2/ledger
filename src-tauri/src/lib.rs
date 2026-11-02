@@ -10,6 +10,7 @@ mod markdown;
 mod models;
 mod planboard;
 mod posts;
+mod screenshot;
 mod search;
 mod settings;
 mod state;
@@ -21,6 +22,8 @@ mod vault;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_screenshot;
 #[cfg(test)]
 mod tests_sync;
 #[cfg(test)]
@@ -37,9 +40,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             // The vault is loaded into memory before the window shows anything.
-            let core = state::Core::open(app.path().app_config_dir()?, app.path().document_dir().ok())?;
+            // LEDGER_CONFIG_DIR moves the per-machine settings (vault location, screenshot hotkey) for testing.
+            let config_dir = match std::env::var_os("LEDGER_CONFIG_DIR") {
+                Some(dir) => dir.into(),
+                None => app.path().app_config_dir()?,
+            };
+            let core = state::Core::open(config_dir.clone(), app.path().document_dir().ok())?;
             let sync = core.sync.clone();
             let core = Arc::new(Mutex::new(core));
 
@@ -56,7 +65,8 @@ pub fn run() {
             // If .env is filled in, this also starts with a sync.
             syncer.reconfigure(sync.as_ref());
 
-            app.manage(state::App::new(core, syncer));
+            app.manage(state::App::new(core, syncer, screenshot::Screenshots::new(config_dir)));
+            screenshot::register_saved(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -102,6 +112,13 @@ pub fn run() {
             commands::set_vault_path,
             commands::reload_vault,
             commands::check_vault_changes,
+            commands::save_screenshot_settings,
+            commands::take_screenshot,
+            commands::pause_screenshot_hotkey,
+            commands::screenshot_image,
+            commands::screenshot_overlay_ready,
+            commands::screenshot_finish,
+            commands::screenshot_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

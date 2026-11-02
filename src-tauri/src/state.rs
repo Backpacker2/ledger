@@ -7,7 +7,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use rusqlite::Connection;
 
 use crate::error::{Error, Result};
-use crate::settings::{self, AppConfig, SyncConfig};
+use crate::screenshot::Screenshots;
+use crate::settings::{self, SyncConfig};
 use crate::syncer::Syncer;
 use crate::vault::Vault;
 
@@ -67,7 +68,7 @@ impl Core {
 
         let mut vault = Vault::open(path.to_path_buf())?;
         let conn = vault.load()?;
-        settings::save_config(&self.config_dir, &AppConfig { vault_path: Some(path.display().to_string()) })?;
+        settings::update_config(&self.config_dir, |config| config.vault_path = Some(path.display().to_string()))?;
 
         self.sync = settings::read_env(vault.root()).complete();
         self.vault = vault;
@@ -97,11 +98,12 @@ fn copy_dir(from: &Path, to: &Path) -> Result<()> {
 pub struct App {
     core: Arc<Mutex<Core>>,
     pub syncer: Syncer,
+    pub screenshots: Screenshots,
 }
 
 impl App {
-    pub fn new(core: Arc<Mutex<Core>>, syncer: Syncer) -> App {
-        App { core, syncer }
+    pub fn new(core: Arc<Mutex<Core>>, syncer: Syncer, screenshots: Screenshots) -> App {
+        App { core, syncer, screenshots }
     }
 
     pub fn lock(&self) -> MutexGuard<'_, Core> {
