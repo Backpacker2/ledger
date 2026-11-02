@@ -2,10 +2,11 @@
 //! everything that changes something goes through `App::mutate`, which writes it through to the vault's files.
 //! Argument names are snake_case here and camelCase from the frontend.
 
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{Error, Result};
 use crate::github::GithubRemote;
@@ -15,7 +16,7 @@ use crate::screenshot::{self, Region, ScreenshotSettings};
 use crate::settings::{self, SyncConfig, SyncEnv};
 use crate::state::App;
 use crate::syncer::SyncStatus;
-use crate::{document_types, documents, markdown, planboard, posts, search, stories, threads};
+use crate::{board, deliverables, feedback, markdown, posts, projects, prompts, search, stories, templates, threads, uploads};
 
 #[tauri::command]
 pub fn render_markdown(body: String) -> String {
@@ -24,178 +25,368 @@ pub fn render_markdown(body: String) -> String {
 
 #[tauri::command]
 pub fn search(app: State<App>, query: String) -> Result<Vec<SearchHit>> {
-    app.read(|c| search::search(c, &query))
+    app.read(|c, _| search::search(c, &query))
+}
+
+// ---- projects ---------------------------------------------------------------------------------------
+
+/// Every project with its threads, for the sidebar.
+#[tauri::command]
+pub fn list_projects(app: State<App>) -> Result<Vec<ProjectSummary>> {
+    app.read(|c, _| projects::list(c))
+}
+
+#[tauri::command]
+pub fn create_project(app: State<App>, name: String) -> Result<ProjectSummary> {
+    app.mutate(|c, _| projects::create(c, &name))
+}
+
+#[tauri::command]
+pub fn rename_project(app: State<App>, slug: String, name: String) -> Result<ProjectSummary> {
+    app.mutate(|c, _| projects::rename(c, &slug, &name))
+}
+
+#[tauri::command]
+pub fn get_project(app: State<App>, slug: String) -> Result<ProjectView> {
+    app.read(|c, _| projects::get(c, &slug))
+}
+
+#[tauri::command]
+pub fn save_readme(app: State<App>, slug: String, text: String) -> Result<ProjectView> {
+    app.mutate(|c, _| projects::save_readme(c, &slug, &text))
+}
+
+/// Deletes the project and its whole folder, attachments and non-markdown deliverables included.
+#[tauri::command]
+pub fn delete_project(app: State<App>, slug: String) -> Result<()> {
+    {
+        let mut guard = app.lock();
+        let core = &mut *guard;
+        safe_segment(&slug)?;
+        projects::delete(&core.conn, &slug)?;
+        core.vault.persist(&core.conn)?;
+        core.vault.remove_project_dir(&slug)?;
+    }
+    app.syncer.dirty();
+    Ok(())
 }
 
 // ---- threads ----------------------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn list_threads(app: State<App>) -> Result<Vec<ThreadSummary>> {
-    app.read(threads::list)
+pub fn create_thread(app: State<App>, project: String, title: String) -> Result<ThreadSummary> {
+    app.mutate(|c, _| threads::create(c, &project, &title))
 }
 
 #[tauri::command]
-pub fn create_thread(app: State<App>, title: String) -> Result<ThreadSummary> {
-    app.mutate(|c| threads::create(c, &title))
+pub fn rename_thread(app: State<App>, project: String, slug: String, title: String) -> Result<ThreadSummary> {
+    app.mutate(|c, _| threads::rename(c, &project, &slug, &title))
 }
 
 #[tauri::command]
-pub fn rename_thread(app: State<App>, slug: String, title: String) -> Result<ThreadSummary> {
-    app.mutate(|c| threads::rename(c, &slug, &title))
+pub fn get_thread(app: State<App>, project: String, slug: String) -> Result<ThreadView> {
+    app.read(|c, root| threads::get(c, root, &project, &slug))
 }
 
 #[tauri::command]
-pub fn get_thread(app: State<App>, slug: String) -> Result<ThreadView> {
-    app.read(|c| threads::get(c, &slug))
+pub fn delete_thread(app: State<App>, project: String, slug: String) -> Result<()> {
+    app.mutate(|c, root| threads::delete(c, root, &project, &slug))
 }
 
 #[tauri::command]
-pub fn delete_thread(app: State<App>, slug: String) -> Result<()> {
-    app.mutate(|c| threads::delete(c, &slug))
+pub fn link_threads(app: State<App>, project: String, slug: String, other_slug: String) -> Result<()> {
+    app.mutate(|c, _| threads::link(c, &project, &slug, &other_slug))
 }
 
 #[tauri::command]
-pub fn link_threads(app: State<App>, slug: String, other_slug: String) -> Result<()> {
-    app.mutate(|c| threads::link(c, &slug, &other_slug))
-}
-
-#[tauri::command]
-pub fn unlink_threads(app: State<App>, slug: String, other_slug: String) -> Result<()> {
-    app.mutate(|c| threads::unlink(c, &slug, &other_slug))
+pub fn unlink_threads(app: State<App>, project: String, slug: String, other_slug: String) -> Result<()> {
+    app.mutate(|c, _| threads::unlink(c, &project, &slug, &other_slug))
 }
 
 // ---- posts ------------------------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn add_post(app: State<App>, slug: String, body: String, reply_to_id: Option<String>) -> Result<PostView> {
-    app.mutate(|c| posts::add(c, &slug, &body, AddOptions { reply_to_id, ..Default::default() }))
+pub fn add_post(app: State<App>, project: String, thread: String, body: String, reply_to_id: Option<String>) -> Result<PostView> {
+    app.mutate(|c, _| posts::add(c, &project, &thread, &body, AddOptions { reply_to_id, ..Default::default() }))
 }
 
 #[tauri::command]
-pub fn update_post(app: State<App>, slug: String, id: String, body: String) -> Result<PostView> {
-    app.mutate(|c| posts::update(c, &slug, &id, &body))
+pub fn update_post(app: State<App>, project: String, thread: String, id: String, body: String) -> Result<PostView> {
+    app.mutate(|c, _| posts::update(c, &project, &thread, &id, &body))
 }
 
 #[tauri::command]
-pub fn delete_post(app: State<App>, slug: String, id: String) -> Result<()> {
-    app.mutate(|c| posts::delete(c, &slug, &id))
+pub fn delete_post(app: State<App>, project: String, thread: String, id: String) -> Result<()> {
+    app.mutate(|c, _| posts::delete(c, &project, &thread, &id))
 }
 
-// ---- document types ---------------------------------------------------------------------------------
+// ---- prompts ----------------------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn list_document_types(app: State<App>) -> Result<Vec<DocumentType>> {
-    app.read(document_types::list)
-}
-
-#[tauri::command]
-pub fn create_document_type(app: State<App>, name: String, trigger: Option<String>, questions: Option<Vec<String>>) -> Result<DocumentType> {
-    app.mutate(|c| document_types::create(c, &name, trigger.as_deref(), questions.as_deref()))
+pub fn create_prompt(app: State<App>, project: String, thread: String, title: String, body: String, template_id: Option<String>) -> Result<PromptView> {
+    app.mutate(|c, _| prompts::create(c, &project, &thread, &title, &body, template_id.as_deref()))
 }
 
 #[tauri::command]
-pub fn update_document_type(
+pub fn update_prompt(app: State<App>, project: String, thread: String, id: String, title: Option<String>, body: Option<String>) -> Result<PromptView> {
+    app.mutate(|c, _| prompts::update(c, &project, &thread, &id, title.as_deref(), body.as_deref()))
+}
+
+#[tauri::command]
+pub fn delete_prompt(app: State<App>, project: String, thread: String, id: String) -> Result<()> {
+    app.mutate(|c, _| prompts::delete(c, &project, &thread, &id))
+}
+
+#[tauri::command]
+pub fn link_prompt_deliverable(app: State<App>, project: String, thread: String, id: String, path: String) -> Result<PromptView> {
+    app.mutate(|c, _| prompts::link_deliverable(c, &project, &thread, &id, &path))
+}
+
+#[tauri::command]
+pub fn unlink_prompt_deliverable(app: State<App>, project: String, thread: String, id: String, path: String) -> Result<PromptView> {
+    app.mutate(|c, _| prompts::unlink_deliverable(c, &project, &thread, &id, &path))
+}
+
+/// Starts a deliverable for the prompt: a new markdown file (from the prompt's template, if it has one) that the
+/// prompt is linked to.
+#[tauri::command]
+pub fn create_prompt_deliverable(app: State<App>, project: String, thread: String, id: String, name: String) -> Result<PromptView> {
+    app.mutate(|c, _| {
+        let prompt = prompts::get(c, &project, &thread, &id)?;
+        let skeleton = prompt.template_id.as_deref().and_then(|t| templates::find(c, &project, t).ok()).map(|t| t.body).unwrap_or_default();
+        let created = deliverables::create(c, &project, &name, &skeleton)?;
+        prompts::link_deliverable(c, &project, &thread, &id, &created.path)
+    })
+}
+
+// ---- feedback ---------------------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn add_feedback(app: State<App>, project: String, thread: String, deliverable_path: String, body: String) -> Result<FeedbackView> {
+    app.mutate(|c, _| feedback::add(c, &project, &thread, &deliverable_path, &body))
+}
+
+#[tauri::command]
+pub fn set_feedback_status(app: State<App>, project: String, thread: String, id: String, status: String) -> Result<FeedbackView> {
+    app.mutate(|c, _| feedback::set_status(c, &project, &thread, &id, &status))
+}
+
+#[tauri::command]
+pub fn update_feedback(app: State<App>, project: String, thread: String, id: String, body: String) -> Result<FeedbackView> {
+    app.mutate(|c, _| feedback::update(c, &project, &thread, &id, &body))
+}
+
+#[tauri::command]
+pub fn delete_feedback(app: State<App>, project: String, thread: String, id: String) -> Result<()> {
+    app.mutate(|c, _| feedback::delete(c, &project, &thread, &id))
+}
+
+// ---- uploads and project files ----------------------------------------------------------------------
+
+/// Copies files from this machine into the project's attachments and records them in the thread.
+#[tauri::command]
+pub fn upload_files(app: State<App>, project: String, thread: String, paths: Vec<String>, description: String) -> Result<Vec<UploadView>> {
+    let sources: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    app.mutate(|c, root| uploads::add_files(c, root, &project, &thread, &sources, &description))
+}
+
+#[tauri::command]
+pub fn update_upload(app: State<App>, project: String, thread: String, id: String, description: String) -> Result<UploadView> {
+    app.mutate(|c, root| uploads::set_description(c, root, &project, &thread, &id, &description))
+}
+
+#[tauri::command]
+pub fn delete_upload(app: State<App>, project: String, thread: String, id: String) -> Result<()> {
+    app.mutate(|c, root| uploads::delete(c, root, &project, &thread, &id))
+}
+
+/// A path inside a project's folder, from a path given relative to it; anything that could leave the folder is refused.
+fn project_path(root: &Path, project: &str, rel: &str) -> Result<PathBuf> {
+    safe_segment(project)?;
+    let rel_path = Path::new(rel);
+    if rel.is_empty() || rel_path.components().any(|c| !matches!(c, Component::Normal(_))) {
+        return Err(Error::invalid("That path isn't inside the project"));
+    }
+    Ok(uploads::project_dir(root, project).join(rel_path))
+}
+
+fn safe_segment(segment: &str) -> Result<()> {
+    if segment.is_empty() || segment == "." || segment == ".." || segment.contains(['/', '\\']) {
+        return Err(Error::invalid("That isn't a project"));
+    }
+    Ok(())
+}
+
+/// The bytes of a file in a project's folder (an attachment, a deliverable), for the screen to show.
+#[tauri::command]
+pub fn read_project_file(app: State<App>, project: String, path: String) -> Result<tauri::ipc::Response> {
+    let file = app.read(|_, root| project_path(root, &project, &path))?;
+    let bytes = std::fs::read(&file).map_err(|e| Error::io(&file, e))?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// Opens a file in a project's folder with the system's default program, or shows it in the file manager.
+#[tauri::command]
+pub fn open_project_file(app: AppHandle, project: String, path: String, reveal: bool) -> Result<()> {
+    let state = app.state::<App>();
+    let file = state.read(|_, root| project_path(root, &project, &path))?;
+    if !file.exists() {
+        return Err(Error::not_found("That file isn't there any more"));
+    }
+    let opener = app.opener();
+    if reveal {
+        opener.reveal_item_in_dir(&file).map_err(Error::screenshot)
+    } else {
+        opener.open_path(file.display().to_string(), None::<&str>).map_err(Error::screenshot)
+    }
+}
+
+// ---- deliverables -----------------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn list_deliverables(app: State<App>, project: String) -> Result<Vec<DeliverableSummary>> {
+    app.read(|c, _| deliverables::list(c, &project))
+}
+
+#[tauri::command]
+pub fn get_deliverable(app: State<App>, project: String, path: String) -> Result<DeliverableView> {
+    app.read(|c, _| deliverables::get(c, &project, &path))
+}
+
+#[tauri::command]
+pub fn create_deliverable(app: State<App>, project: String, name: String, body: String) -> Result<DeliverableView> {
+    app.mutate(|c, _| deliverables::create(c, &project, &name, &body))
+}
+
+#[tauri::command]
+pub fn save_deliverable(app: State<App>, project: String, path: String, body: String) -> Result<DeliverableView> {
+    app.mutate(|c, _| deliverables::save(c, &project, &path, &body))
+}
+
+#[tauri::command]
+pub fn publish_deliverable(app: State<App>, project: String, path: String, bump: Option<Bump>, version: Option<String>) -> Result<DeliverableView> {
+    app.mutate(|c, root| deliverables::publish(c, root, &project, &path, bump.unwrap_or_default(), version.as_deref()))
+}
+
+#[tauri::command]
+pub fn delete_deliverable(app: State<App>, project: String, path: String) -> Result<()> {
+    app.mutate(|c, root| deliverables::delete(c, root, &project, &path))
+}
+
+// ---- templates --------------------------------------------------------------------------------------
+
+/// The templates of one scope: "" for the vault-wide ones, or a project's slug.
+#[tauri::command]
+pub fn list_templates(app: State<App>, scope: String) -> Result<Vec<TemplateView>> {
+    app.read(|c, _| templates::list(c, &scope))
+}
+
+/// A project's templates followed by the vault-wide ones (marked if the project replaced them).
+#[tauri::command]
+pub fn project_templates(app: State<App>, project: String) -> Result<Vec<TemplateView>> {
+    app.read(|c, _| templates::for_project(c, &project))
+}
+
+/// What a prompt in the project can start from.
+#[tauri::command]
+pub fn effective_templates(app: State<App>, project: String) -> Result<Vec<TemplateView>> {
+    app.read(|c, _| templates::effective(c, &project))
+}
+
+#[tauri::command]
+pub fn create_template(app: State<App>, scope: String, name: String, trigger: String, questions: Vec<String>, body: String) -> Result<TemplateView> {
+    app.mutate(|c, _| templates::create(c, &scope, &name, &trigger, &questions, &body))
+}
+
+/// Gives the project its own copy of a vault-wide template, which then replaces the shared one there.
+#[tauri::command]
+pub fn override_template(app: State<App>, project: String, id: String) -> Result<TemplateView> {
+    app.mutate(|c, _| templates::override_global(c, &project, &id))
+}
+
+#[tauri::command]
+pub fn update_template(
     app: State<App>,
-    slug: String,
+    scope: String,
+    id: String,
     name: Option<String>,
     trigger: Option<String>,
     questions: Option<Vec<String>>,
-) -> Result<DocumentType> {
-    app.mutate(|c| document_types::update(c, &slug, name.as_deref(), trigger.as_deref(), questions.as_deref()))
+    body: Option<String>,
+) -> Result<TemplateView> {
+    app.mutate(|c, _| templates::update(c, &scope, &id, name.as_deref(), trigger.as_deref(), questions.as_deref(), body.as_deref()))
 }
 
 #[tauri::command]
-pub fn delete_document_type(app: State<App>, slug: String) -> Result<()> {
-    app.mutate(|c| document_types::delete(c, &slug))
+pub fn delete_template(app: State<App>, scope: String, id: String) -> Result<()> {
+    app.mutate(|c, _| templates::delete(c, &scope, &id))
 }
 
-// ---- documents --------------------------------------------------------------------------------------
+// ---- user stories and the board ---------------------------------------------------------------------
 
 #[tauri::command]
-pub fn list_documents(app: State<App>) -> Result<Vec<DocumentSummary>> {
-    app.read(documents::list_all)
-}
-
-#[tauri::command]
-pub fn get_document(app: State<App>, id: String) -> Result<DocumentView> {
-    app.read(|c| documents::get(c, &id))
+pub fn list_stories(app: State<App>, project: String) -> Result<Vec<StoryView>> {
+    app.read(|c, _| stories::list(c, &project))
 }
 
 #[tauri::command]
-pub fn get_document_version(app: State<App>, id: String, version: String) -> Result<DocumentView> {
-    app.read(|c| documents::get_version(c, &id, &version))
+pub fn create_story(app: State<App>, project: String, draft: StoryDraft) -> Result<StoryView> {
+    app.mutate(|c, _| stories::create(c, &project, draft))
 }
 
 #[tauri::command]
-pub fn create_document(app: State<App>, document_type_slug: String, title: String, thread_slug: Option<String>) -> Result<DocumentView> {
-    app.mutate(|c| documents::create(c, &document_type_slug, &title, thread_slug.as_deref()))
+pub fn update_story(app: State<App>, project: String, id: String, updates: StoryUpdate) -> Result<StoryView> {
+    app.mutate(|c, _| stories::update(c, &project, &id, updates))
 }
 
 #[tauri::command]
-pub fn update_document(app: State<App>, id: String, title: Option<String>, body: Option<String>) -> Result<DocumentView> {
-    app.mutate(|c| documents::update(c, &id, title.as_deref(), body.as_deref()))
+pub fn delete_story(app: State<App>, project: String, id: String) -> Result<()> {
+    app.mutate(|c, _| stories::delete(c, &project, &id))
 }
 
 #[tauri::command]
-pub fn publish_document(app: State<App>, id: String, bump: Option<Bump>, version: Option<String>) -> Result<DocumentView> {
-    app.mutate(|c| documents::publish(c, &id, bump.unwrap_or_default(), version.as_deref()))
+pub fn link_story_thread(app: State<App>, project: String, id: String, thread_slug: String) -> Result<StoryView> {
+    app.mutate(|c, _| stories::add_thread(c, &project, &id, &thread_slug))
 }
 
 #[tauri::command]
-pub fn start_drafting(app: State<App>, id: String, thread_slug: Option<String>, new_thread_title: Option<String>) -> Result<DocumentView> {
-    app.mutate(|c| documents::start_drafting(c, &id, thread_slug.as_deref(), new_thread_title.as_deref()))
+pub fn unlink_story_thread(app: State<App>, project: String, id: String, thread_slug: String) -> Result<StoryView> {
+    app.mutate(|c, _| stories::remove_thread(c, &project, &id, &thread_slug))
 }
 
 #[tauri::command]
-pub fn delete_document(app: State<App>, id: String) -> Result<()> {
-    app.mutate(|c| documents::delete(c, &id))
-}
-
-// ---- user stories and the planboard -----------------------------------------------------------------
-
-#[tauri::command]
-pub fn get_planboard(app: State<App>) -> Result<Planboard> {
-    app.read(planboard::get)
+pub fn get_board(app: State<App>, project: String) -> Result<Board> {
+    app.read(|c, _| board::get(c, &project))
 }
 
 #[tauri::command]
-pub fn create_user_story(app: State<App>, draft: StoryDraft) -> Result<StoryView> {
-    app.mutate(|c| stories::create(c, draft))
+pub fn create_task(app: State<App>, project: String, title: String, body: String, story_id: Option<String>, thread_slug: Option<String>) -> Result<TaskView> {
+    app.mutate(|c, _| board::create_task(c, &project, &title, &body, story_id.as_deref(), thread_slug.as_deref()))
 }
 
 #[tauri::command]
-pub fn update_user_story(app: State<App>, id: String, updates: StoryUpdate) -> Result<StoryView> {
-    app.mutate(|c| stories::update(c, &id, updates))
+pub fn update_task(app: State<App>, project: String, id: String, updates: TaskUpdate) -> Result<TaskView> {
+    app.mutate(|c, _| board::update_task(c, &project, &id, updates))
 }
 
 #[tauri::command]
-pub fn delete_user_story(app: State<App>, id: String) -> Result<()> {
-    app.mutate(|c| stories::delete(c, &id))
+pub fn delete_task(app: State<App>, project: String, id: String) -> Result<()> {
+    app.mutate(|c, _| board::delete_task(c, &project, &id))
 }
 
 #[tauri::command]
-pub fn link_story_thread(app: State<App>, id: String, thread_slug: String) -> Result<StoryView> {
-    app.mutate(|c| stories::add_thread(c, &id, &thread_slug))
+pub fn add_column(app: State<App>, project: String, name: String) -> Result<Vec<Column>> {
+    app.mutate(|c, _| board::add_column(c, &project, &name))
 }
 
 #[tauri::command]
-pub fn unlink_story_thread(app: State<App>, id: String, thread_slug: String) -> Result<StoryView> {
-    app.mutate(|c| stories::remove_thread(c, &id, &thread_slug))
+pub fn rename_column(app: State<App>, project: String, id: String, name: String) -> Result<Vec<Column>> {
+    app.mutate(|c, _| board::rename_column(c, &project, &id, &name))
 }
 
 #[tauri::command]
-pub fn add_column(app: State<App>, name: String) -> Result<Vec<Column>> {
-    app.mutate(|c| planboard::add_column(c, &name))
-}
-
-#[tauri::command]
-pub fn rename_column(app: State<App>, id: String, name: String) -> Result<Vec<Column>> {
-    app.mutate(|c| planboard::rename_column(c, &id, &name))
-}
-
-#[tauri::command]
-pub fn delete_column(app: State<App>, id: String) -> Result<Vec<Column>> {
-    app.mutate(|c| planboard::delete_column(c, &id))
+pub fn delete_column(app: State<App>, project: String, id: String) -> Result<Vec<Column>> {
+    app.mutate(|c, _| board::delete_column(c, &project, &id))
 }
 
 // ---- the vault and GitHub sync ----------------------------------------------------------------------
@@ -217,7 +408,9 @@ pub struct SettingsView {
     pub vault_path: String,
     /// The location is fixed by the `LEDGER_VAULT` environment variable.
     pub vault_locked: bool,
-    pub env_file: String,
+    /// Where the vault's settings and its secret are kept (both inside the vault, both gitignored).
+    pub settings_file: String,
+    pub secrets_file: String,
     pub version: String,
     pub sync: SyncSettings,
     pub status: SyncStatus,
@@ -239,17 +432,18 @@ fn view(app: &App) -> SettingsView {
     SettingsView {
         vault_path: root.display().to_string(),
         vault_locked: locked,
-        env_file: root.join(settings::ENV_FILE).display().to_string(),
+        settings_file: settings::settings_path(&root).display().to_string(),
+        secrets_file: settings::secrets_path(&root).display().to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         sync: SyncSettings {
             configured: env.complete().is_some(),
             has_token: !env.token.is_empty(),
             token_hint,
-            repo: env.repo,
-            branch: env.branch,
+            repo: env.repo.clone(),
+            branch: env.branch.clone(),
         },
         status: app.syncer.status(),
-        screenshot: app.screenshots.settings(),
+        screenshot: app.screenshots.settings(&root),
     }
 }
 
@@ -263,8 +457,8 @@ pub fn sync_status(app: State<App>) -> SyncStatus {
     app.syncer.status()
 }
 
-/// Saves the repository, branch and token to the vault's `.env` and starts syncing. A blank token keeps the
-/// one already saved.
+/// Saves the repository and branch to the vault's settings and the token to its `.env`, and starts syncing. A
+/// blank token keeps the one already saved.
 #[tauri::command]
 pub fn save_sync_settings(app: State<App>, repo: String, branch: String, token: Option<String>) -> Result<SettingsView> {
     let repo = settings::normalize_repo(&repo)?;
@@ -288,7 +482,7 @@ pub fn save_sync_settings(app: State<App>, repo: String, branch: String, token: 
     Ok(view(&app))
 }
 
-/// Turns sync off. The repository and branch stay in `.env`; the token is removed.
+/// Turns sync off. The repository and branch stay in the settings; the token is removed.
 #[tauri::command]
 pub fn disconnect_sync(app: State<App>) -> Result<SettingsView> {
     {
@@ -346,34 +540,50 @@ pub fn sync_now(app: State<App>) -> Result<()> {
 
 /// Moves the app to the vault in `path`. With `copy`, an empty destination first receives the current vault.
 #[tauri::command]
-pub fn set_vault_path(app: State<App>, path: String, copy: bool) -> Result<SettingsView> {
+pub fn set_vault_path(app: AppHandle, path: String, copy: bool) -> Result<SettingsView> {
+    let state = app.state::<App>();
     let config = {
-        let mut core = app.lock();
+        let mut core = state.lock();
         core.set_vault(&PathBuf::from(path.trim()), copy)?;
         core.sync.clone()
     };
-    app.syncer.reconfigure(config.as_ref());
-    Ok(view(&app))
+    state.syncer.reconfigure(config.as_ref());
+    // The new vault has its own settings, the screenshot hotkey among them.
+    screenshot::register_saved(&app);
+    Ok(view(&state))
+}
+
+/// Reads the vault in again from its files.
+#[tauri::command]
+pub fn reload_vault(app: State<App>) -> Result<()> {
+    app.lock().reload()?;
+    app.syncer.dirty();
+    Ok(())
+}
+
+/// Reloads if the files were changed behind the app's back (in Obsidian, say). Whether anything was reloaded.
+#[tauri::command]
+pub fn check_vault_changes(app: State<App>) -> Result<bool> {
+    let mut core = app.lock();
+    if !core.vault.changed_on_disk() {
+        return Ok(false);
+    }
+    core.reload()?;
+    // What was edited elsewhere is part of the vault now, and goes to GitHub like anything else.
+    app.syncer.dirty();
+    Ok(true)
 }
 
 // ---- screenshots ------------------------------------------------------------------------------------
 
-/// Saves the screenshot hotkey and upload URL. The hotkey is registered first, replacing the old one live; if the
+/// Saves the screenshot hotkey in the vault's settings. It is registered first, replacing the old one live; if the
 /// system refuses it nothing is saved and the old one keeps working.
 #[tauri::command]
-pub fn save_screenshot_settings(app: AppHandle, hotkey: String, upload_url: String) -> Result<SettingsView> {
-    let url = upload_url.trim().to_string();
-    if !url.is_empty() && !reqwest::Url::parse(&url).is_ok_and(|u| matches!(u.scheme(), "http" | "https")) {
-        return Err(Error::invalid("The upload URL must start with http:// or https://"));
-    }
+pub fn save_screenshot_hotkey(app: AppHandle, hotkey: String) -> Result<SettingsView> {
     screenshot::apply_hotkey(&app, &hotkey)?;
-
     let state = app.state::<App>();
-    let config_dir = state.lock().config_dir.clone();
-    settings::update_config(&config_dir, |config| {
-        config.screenshot_hotkey = Some(hotkey.trim().to_string());
-        config.screenshot_upload_url = Some(url).filter(|u| !u.is_empty());
-    })?;
+    let root = state.lock().vault.root().to_path_buf();
+    settings::update_settings(&root, |s| s.screenshot_hotkey = Some(hotkey.trim().to_string()))?;
     Ok(view(&state))
 }
 
@@ -410,19 +620,23 @@ pub fn screenshot_cancel(app: AppHandle) {
     screenshot::cancel(&app);
 }
 
-/// Reads the vault in again from its files.
+/// The screenshot waiting to be attached, as PNG bytes.
 #[tauri::command]
-pub fn reload_vault(app: State<App>) -> Result<()> {
-    app.lock().reload()
+pub fn pending_screenshot_image(app: AppHandle) -> Result<tauri::ipc::Response> {
+    Ok(tauri::ipc::Response::new(screenshot::pending_image(&app)?))
 }
 
-/// Reloads if the files were changed behind the app's back (in Obsidian, say). Whether anything was reloaded.
+/// Saves the waiting screenshot in the project's attachments and records it in the thread.
 #[tauri::command]
-pub fn check_vault_changes(app: State<App>) -> Result<bool> {
-    let mut core = app.lock();
-    if !core.vault.changed_on_disk() {
-        return Ok(false);
-    }
-    core.reload()?;
-    Ok(true)
+pub fn attach_screenshot(app: AppHandle, project: String, thread: String, description: String) -> Result<UploadView> {
+    let state = app.state::<App>();
+    let png = screenshot::pending_image(&app)?;
+    let upload = state.mutate(|c, root| uploads::add_bytes(c, root, &project, &thread, &screenshot::file_name(), &png, &description))?;
+    screenshot::discard_pending(&app);
+    Ok(upload)
+}
+
+#[tauri::command]
+pub fn discard_screenshot(app: AppHandle) {
+    screenshot::discard_pending(&app);
 }

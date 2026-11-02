@@ -2,9 +2,9 @@
 // runes so any component can raise a toast or ask a question without prop drilling.
 
 import { listen } from '@tauri-apps/api/event';
-import { goto, invalidateAll } from '$app/navigation';
+import { invalidateAll } from '$app/navigation';
 import { api } from './api';
-import type { ScreenshotResult, SyncStatus } from './types';
+import type { ScreenshotTaken, SyncStatus } from './types';
 
 // ---- toasts -----------------------------------------------------------------------------------------
 
@@ -114,6 +114,9 @@ export function setTheme(id: string) {
 /** Where the sync worker has got to; kept current by events from the backend. */
 export const sync = $state<{ status: SyncStatus | null }>({ status: null });
 
+/** A screenshot has been taken and waits for a thread to be attached to (the backend holds the picture). */
+export const screenshot = $state<{ pending: ScreenshotTaken | null }>({ pending: null });
+
 /**
  * Listens for what the backend announces — sync progress, files changed by a pull — and checks the vault for
  * edits made elsewhere (in Obsidian, say) whenever the window regains focus. Returns the cleanup.
@@ -139,9 +142,9 @@ export function startBackendEvents(): () => void {
 		.then(keep)
 		.catch(() => {});
 
-	// A screenshot was taken and uploaded: the main window opens it. A failure is said out loud.
-	listen<ScreenshotResult>('screenshot-ready', (event) => {
-		void goto(`/screenshot?url=${encodeURIComponent(event.payload.url)}`);
+	// A screenshot was taken: the main window asks where it belongs. A failure is said out loud.
+	listen<ScreenshotTaken>('screenshot-ready', (event) => {
+		screenshot.pending = event.payload;
 	})
 		.then(keep)
 		.catch(() => {});

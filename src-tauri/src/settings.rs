@@ -1,9 +1,15 @@
-//! Where the vault is, and how it syncs.
+//! Where the vault is, and the settings that live in it.
 //!
-//! The vault's location is the one thing that can't live in the vault, so it is kept in a small `config.json`
-//! in the app's config folder. Everything about GitHub — repository, branch and the access token — lives in a
-//! `.env` file *inside the vault*, next to the notes it syncs. A `.gitignore` in the vault lists `.env`, so the
-//! token never reaches GitHub, and the app reads `.env` at startup to see whether sync is set up.
+//! The vault's location is the one thing that can't live in the vault, so it is kept in a small `config.json` in
+//! the app's config folder. Everything else belongs to the vault and sits in `<vault>/.ledger/`, which the vault's
+//! `.gitignore` lists, so none of it is ever pushed to GitHub:
+//!
+//! ```text
+//! .ledger/settings.json     the repository, the branch, the screenshot hotkey
+//! .ledger/.env              the GitHub access token (the one secret)
+//! .ledger/sync-state.json   the sync's own bookkeeping
+//! .ledger/conflicts/        versions set aside when a sync resolved a conflict
+//! ```
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,27 +18,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 
-pub const ENV_FILE: &str = ".env";
-const KEY_REPO: &str = "GITHUB_REPO";
-const KEY_BRANCH: &str = "GITHUB_BRANCH";
+pub const LEDGER_DIR: &str = ".ledger";
 const KEY_TOKEN: &str = "GITHUB_TOKEN";
 
 const DEFAULT_GITIGNORE: &str = "\
-# Local-only files: these never leave this machine.
-.env
+# Local-only: settings, the access token and sync bookkeeping never leave this machine.
 .ledger/
+.env
 .obsidian/
 ";
 
 // ---- the app's own config ---------------------------------------------------------------------------
 
-/// Per-machine settings that live outside the vault, so they are never synced to other machines.
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppConfig {
     pub vault_path: Option<String>,
-    pub screenshot_hotkey: Option<String>,
-    pub screenshot_upload_url: Option<String>,
 }
 
 fn config_file(dir: &Path) -> PathBuf {
@@ -69,9 +70,49 @@ pub fn resolve_vault(config_dir: &Path, documents_dir: Option<PathBuf>) -> (Path
     (documents_dir.map_or_else(|| config_dir.join("vault"), |d| d.join("Ledger")), false)
 }
 
-// ---- GitHub sync settings in the vault's .env -------------------------------------------------------
+// ---- the vault's own settings -----------------------------------------------------------------------
 
-/// What `.env` says, filled in or not.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GithubSettings {
+    pub repo: String,
+    pub branch: String,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct VaultSettings {
+    pub github: GithubSettings,
+    pub screenshot_hotkey: Option<String>,
+}
+
+pub fn settings_path(root: &Path) -> PathBuf {
+    root.join(LEDGER_DIR).join("settings.json")
+}
+
+pub fn secrets_path(root: &Path) -> PathBuf {
+    root.join(LEDGER_DIR).join(".env")
+}
+
+pub fn read_settings(root: &Path) -> VaultSettings {
+    fs::read_to_string(settings_path(root)).ok().and_then(|text| serde_json::from_str(&text).ok()).unwrap_or_default()
+}
+
+/// Changes some settings and leaves the others as they were.
+pub fn update_settings(root: &Path, change: impl FnOnce(&mut VaultSettings)) -> Result<()> {
+    let mut settings = read_settings(root);
+    change(&mut settings);
+    let file = settings_path(root);
+    if let Some(dir) = file.parent() {
+        fs::create_dir_all(dir).map_err(|e| Error::io(dir, e))?;
+    }
+    fs::write(&file, serde_json::to_string_pretty(&settings).unwrap_or_default()).map_err(|e| Error::io(&file, e))?;
+    ensure_gitignore(root)
+}
+
+// ---- GitHub sync: settings plus the secret ----------------------------------------------------------
+
+/// The repository and branch from `settings.json` and the token from `.ledger/.env`, filled in or not.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SyncEnv {
     pub repo: String,
@@ -97,39 +138,40 @@ impl SyncEnv {
 }
 
 pub fn read_env(root: &Path) -> SyncEnv {
-    let mut env = SyncEnv::default();
-    let Ok(text) = fs::read_to_string(root.join(ENV_FILE)) else { return env };
-    for line in text.lines() {
-        match parse_line(line) {
-            Some((KEY_REPO, value)) => env.repo = value,
-            Some((KEY_BRANCH, value)) => env.branch = value,
-            Some((KEY_TOKEN, value)) => env.token = value,
-            _ => {}
+    let github = read_settings(root).github;
+    let mut env = SyncEnv { repo: github.repo, branch: github.branch, token: String::new() };
+    if let Ok(text) = fs::read_to_string(secrets_path(root)) {
+        for line in text.lines() {
+            if let Some((KEY_TOKEN, value)) = parse_line(line) {
+                env.token = value;
+            }
         }
     }
     env
 }
 
-/// Rewrites the three keys and leaves every other line (comments, unrelated variables) as it was.
+/// The repository and branch go to `settings.json`, the token to `.env`; other lines in `.env` stay as they were.
 pub fn write_env(root: &Path, env: &SyncEnv) -> Result<()> {
-    let file = root.join(ENV_FILE);
-    let existing = fs::read_to_string(&file).unwrap_or_default();
+    update_settings(root, |s| s.github = GithubSettings { repo: env.repo.clone(), branch: env.branch.clone() })?;
 
+    let file = secrets_path(root);
+    let existing = fs::read_to_string(&file).unwrap_or_default();
     let mut lines: Vec<String> = existing.lines().map(str::to_string).collect();
     if lines.is_empty() {
-        lines.push("# Ledger's GitHub sync settings. This file stays on this machine: .gitignore keeps it out of the repo.".into());
+        lines.push("# Ledger's GitHub access token. This file stays on this machine: it is gitignored and never synced.".into());
     }
-    for (key, value) in [(KEY_REPO, &env.repo), (KEY_BRANCH, &env.branch), (KEY_TOKEN, &env.token)] {
-        let line = format!("{key}={}", quote(value));
-        match lines.iter().position(|l| parse_line(l).is_some_and(|(k, _)| k == key)) {
-            Some(i) => lines[i] = line,
-            None => lines.push(line),
-        }
+    let line = format!("{KEY_TOKEN}={}", quote(&env.token));
+    match lines.iter().position(|l| parse_line(l).is_some_and(|(k, _)| k == KEY_TOKEN)) {
+        Some(i) => lines[i] = line,
+        None => lines.push(line),
     }
 
+    if let Some(dir) = file.parent() {
+        fs::create_dir_all(dir).map_err(|e| Error::io(dir, e))?;
+    }
     fs::write(&file, lines.join("\n") + "\n").map_err(|e| Error::io(&file, e))?;
     restrict_to_owner(&file);
-    ensure_gitignore(root)
+    Ok(())
 }
 
 fn parse_line(line: &str) -> Option<(&str, String)> {
@@ -160,7 +202,8 @@ fn restrict_to_owner(file: &Path) {
 #[cfg(not(unix))]
 fn restrict_to_owner(_file: &Path) {}
 
-/// Makes sure the vault's `.gitignore` keeps `.env` and the sync bookkeeping out of GitHub.
+/// Makes sure the vault's `.gitignore` keeps `.ledger/` (settings, token, sync bookkeeping) and any stray `.env`
+/// out of GitHub.
 pub fn ensure_gitignore(root: &Path) -> Result<()> {
     let file = root.join(".gitignore");
     let Ok(existing) = fs::read_to_string(&file) else {
@@ -169,11 +212,11 @@ pub fn ensure_gitignore(root: &Path) -> Result<()> {
 
     let has = |names: &[&str]| existing.lines().any(|l| names.contains(&l.trim()));
     let mut missing = String::new();
-    if !has(&[".env", "/.env"]) {
-        missing.push_str(".env\n");
-    }
     if !has(&[".ledger/", ".ledger", "/.ledger/", "/.ledger"]) {
         missing.push_str(".ledger/\n");
+    }
+    if !has(&[".env", "/.env"]) {
+        missing.push_str(".env\n");
     }
     if missing.is_empty() {
         return Ok(());

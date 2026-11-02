@@ -1,68 +1,51 @@
 use rusqlite::Connection;
 
 use crate::db::query_all;
+use crate::deliverables;
 use crate::error::Result;
+use crate::frontmatter;
 use crate::models::SearchHit;
 
 const SNIPPET_CONTEXT: usize = 60;
 const MAX_HITS: usize = 200;
 
-/// Case-insensitive substring search across every post and every live document, newest first.
+/// Case-insensitive substring search across every post, prompt, piece of feedback and markdown deliverable in
+/// every project, newest first.
 pub fn search(conn: &Connection, query: &str) -> Result<Vec<SearchHit>> {
     let query = query.trim();
     if query.is_empty() {
         return Ok(vec![]);
     }
+    let mut hits = vec![];
 
-    let mut hits = query_all(
+    // (kind, id, project, project name, thread slug, thread title, created, text)
+    type Row = (String, String, String, String, Option<String>, Option<String>, String, String);
+    let rows: Vec<Row> = query_all(
         conn,
-        "SELECT p.id, t.title, t.slug, p.created_at, p.body
-         FROM posts p JOIN threads t ON t.slug = p.thread_slug",
+        "SELECT 'post', x.id, x.project_slug, p.name, x.thread_slug, t.title, x.created_at, x.body
+         FROM posts x JOIN threads t ON t.project_slug = x.project_slug AND t.slug = x.thread_slug JOIN projects p ON p.slug = x.project_slug
+         UNION ALL
+         SELECT 'prompt', x.id, x.project_slug, p.name, x.thread_slug, t.title, x.created_at, x.title || ' ' || x.body
+         FROM prompts x JOIN threads t ON t.project_slug = x.project_slug AND t.slug = x.thread_slug JOIN projects p ON p.slug = x.project_slug
+         UNION ALL
+         SELECT 'feedback', x.id, x.project_slug, p.name, x.thread_slug, t.title, x.created_at, x.body
+         FROM feedback x JOIN threads t ON t.project_slug = x.project_slug AND t.slug = x.thread_slug JOIN projects p ON p.slug = x.project_slug
+         UNION ALL
+         SELECT 'deliverable', x.path, x.project_slug, p.name, NULL, NULL, x.modified, x.body
+         FROM deliverables x JOIN projects p ON p.slug = x.project_slug WHERE x.body IS NOT NULL",
         [],
-        |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, String>(3)?,
-                r.get::<_, String>(4)?,
-            ))
-        },
-    )?
-    .into_iter()
-    .filter_map(|(id, thread_title, thread_slug, created_at, body)| {
-        snippet(&body, query).map(|snippet| SearchHit {
-            kind: "post".into(),
-            id,
-            title: thread_title.clone(),
-            thread_slug: Some(thread_slug),
-            thread_title: Some(thread_title),
-            created_at,
-            snippet,
-        })
-    })
-    .collect::<Vec<_>>();
-
-    let documents = query_all(
-        conn,
-        "SELECT d.id, d.title, d.thread_slug, th.title, d.updated_at, d.body
-         FROM documents d LEFT JOIN threads th ON th.slug = d.thread_slug",
-        [],
-        |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, Option<String>>(2)?,
-                r.get::<_, Option<String>>(3)?,
-                r.get::<_, String>(4)?,
-                r.get::<_, String>(5)?,
-            ))
-        },
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?)),
     )?;
-    for (id, title, thread_slug, thread_title, updated_at, body) in documents {
-        // Prefer a body match for the snippet; a title-only match shows the title.
-        if let Some(snippet) = snippet(&body, query).or_else(|| snippet(&title, query)) {
-            hits.push(SearchHit { kind: "document".into(), id, title, thread_slug, thread_title, created_at: updated_at, snippet });
+
+    for (kind, id, project_slug, project_name, thread_slug, thread_title, created_at, text) in rows {
+        if kind == "deliverable" && deliverables::split_version(&id).1.is_some() {
+            continue; // the live file is what is searched, not every frozen copy of it
+        }
+        let text = if kind == "deliverable" { frontmatter::parse(&text).map_or(text.clone(), |p| p.body) } else { text };
+        let title = if kind == "deliverable" { deliverables::file_name(&id).to_string() } else { thread_title.clone().unwrap_or_default() };
+        let found = snippet(&text, query).or_else(|| (kind == "deliverable").then(|| snippet(&title, query)).flatten());
+        if let Some(snippet) = found {
+            hits.push(SearchHit { kind, id, project_slug, project_name, title, thread_slug, created_at, snippet });
         }
     }
 

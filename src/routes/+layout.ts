@@ -5,4 +5,8 @@ import type { LayoutLoad } from './$types';
 
 export const ssr = false;
 
-export const load: LayoutLoad = async () => ({ threads: await api.listThreads() });
+export const load: LayoutLoad = async ({ url }) => {
+	// The screenshot overlay is its own window and needs none of this.
+	if (url.pathname.startsWith('/screenshot-overlay')) return { projects: [] };
+	return { projects: await api.listProjects() };
+};

@@ -6,15 +6,44 @@ export interface LinkedThread {
 }
 
 export interface ThreadSummary {
+	projectSlug: string;
 	slug: string;
 	title: string;
 	createdAt: string;
 	linkedThreadSlugs: string[];
-	postCount: number;
 	linkedCount: number;
-	lastActivity: string;
-	documentCount: number;
+	postCount: number;
+	promptCount: number;
+	feedbackCount: number;
+	uploadCount: number;
 	storyCount: number;
+	lastActivity: string;
+}
+
+/** A project with its threads, as the sidebar shows it. */
+export interface ProjectSummary {
+	slug: string;
+	name: string;
+	createdAt: string;
+	updatedAt: string;
+	threads: ThreadSummary[];
+	deliverableCount: number;
+	storyCount: number;
+	taskCount: number;
+}
+
+export interface ProjectView {
+	slug: string;
+	name: string;
+	description: string;
+	/** The reading guide (README.md), raw and rendered. */
+	readme: string;
+	readmeHtml: string;
+	threadCount: number;
+	deliverableCount: number;
+	storyCount: number;
+	taskCount: number;
+	openTaskCount: number;
 }
 
 export interface Post {
@@ -22,57 +51,136 @@ export interface Post {
 	parentId: string | null;
 	guidingQuestion: boolean;
 	versionPublished: boolean;
-	documentId: string | null;
-	documentVersion: string | null;
+	deliverablePath: string | null;
+	deliverableVersion: string | null;
 	createdAt: string;
 	updatedAt: string;
 	body: string;
 	html: string;
 }
 
+export interface PromptDeliverable {
+	path: string;
+	exists: boolean;
+}
+
+export interface Prompt {
+	id: string;
+	threadSlug: string;
+	title: string;
+	templateId: string | null;
+	templateName: string | null;
+	body: string;
+	html: string;
+	createdAt: string;
+	updatedAt: string;
+	deliverables: PromptDeliverable[];
+}
+
+export interface Feedback {
+	id: string;
+	threadSlug: string;
+	deliverablePath: string;
+	deliverableVersion: string | null;
+	status: 'open' | 'resolved';
+	body: string;
+	html: string;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface Upload {
+	id: string;
+	threadSlug: string;
+	/** Relative to the project folder, e.g. "attachments/diagram.png". */
+	file: string;
+	name: string;
+	size: number;
+	uploadedAt: string;
+	description: string;
+	descriptionHtml: string;
+	image: boolean;
+	/** Whether the file is still where the manifest says. */
+	exists: boolean;
+}
+
 export interface ThreadView {
+	projectSlug: string;
 	slug: string;
 	title: string;
+	description: string;
 	createdAt: string;
 	linkedThreads: LinkedThread[];
 	posts: Post[];
-	documents: DocumentSummary[];
+	prompts: Prompt[];
+	feedback: Feedback[];
+	uploads: Upload[];
 	stories: Story[];
 }
 
-export interface DocumentType {
-	slug: string;
+// ---- deliverables -----------------------------------------------------------------------------------
+
+export type DeliverableKind = 'markdown' | 'image' | 'other';
+
+export interface DeliverableSummary {
+	/** The live file, relative to the deliverables folder. */
+	path: string;
+	name: string;
+	kind: DeliverableKind;
+	size: number;
+	modified: string;
+	/** Whether the live file exists (published versions can outlive it). */
+	exists: boolean;
+	/** Published versions, oldest first. */
+	versions: string[];
+	promptCount: number;
+	openFeedback: number;
+}
+
+export interface DeliverablePrompt {
+	threadSlug: string;
+	threadTitle: string;
+	id: string;
+	title: string;
+}
+
+export interface Deliverable {
+	path: string;
+	basePath: string;
+	name: string;
+	kind: DeliverableKind;
+	/** Set when `path` is a published version, which is read-only. */
+	version: string | null;
+	versions: string[];
+	exists: boolean;
+	size: number;
+	modified: string;
+	body: string | null;
+	html: string | null;
+	editable: boolean;
+	prompts: DeliverablePrompt[];
+	feedback: Feedback[];
+}
+
+// ---- templates --------------------------------------------------------------------------------------
+
+export interface Template {
+	/** "" for a vault-wide template, else the project's slug. */
+	scope: string;
+	id: string;
 	name: string;
 	/** The "use when…" hint. */
 	trigger: string;
 	questions: string[];
-	createdAt: string;
-	updatedAt: string;
-	documentCount: number;
-}
-
-export interface DocumentSummary {
-	id: string;
-	documentTypeSlug: string;
-	documentTypeName: string;
-	title: string;
-	threadSlug: string | null;
-	threadTitle: string | null;
-	version: string | null;
-	createdAt: string;
-	updatedAt: string;
-}
-
-export interface DocumentView extends DocumentSummary {
+	/** The skeleton of the deliverable. */
 	body: string;
-	html: string;
-	/** Published versions, oldest first. */
-	versions: string[];
-	/** A read-only published version rather than the live draft. */
-	snapshot: boolean;
-	/** A snapshot whose draft has since been deleted. */
-	deleted: boolean;
+	createdAt: string;
+	updatedAt: string;
+	/** A vault-wide template the project has replaced with its own. */
+	overridden: boolean;
 }
+
+// ---- stories, tasks, the board ----------------------------------------------------------------------
 
 export interface Criterion {
 	text: string;
@@ -80,14 +188,16 @@ export interface Criterion {
 }
 
 export interface Story {
+	projectSlug: string;
 	id: string;
 	summary: string;
 	role: string;
 	want: string;
 	reason: string;
+	notes: string;
 	criteria: Criterion[];
-	columnId: string;
 	threads: LinkedThread[];
+	taskCount: number;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -97,21 +207,41 @@ export interface Column {
 	name: string;
 }
 
-export interface Planboard {
-	columns: Column[];
-	backlogColumnId: string;
-	userStories: Story[];
-}
-
-export interface SearchHit {
-	kind: 'post' | 'document';
+export interface Task {
 	id: string;
 	title: string;
+	body: string;
+	columnId: string;
+	storyId: string | null;
+	storySummary: string | null;
 	threadSlug: string | null;
 	threadTitle: string | null;
 	createdAt: string;
+	updatedAt: string;
+}
+
+export interface Board {
+	columns: Column[];
+	backlogColumnId: string;
+	tasks: Task[];
+	stories: { id: string; summary: string }[];
+}
+
+// ---- search -----------------------------------------------------------------------------------------
+
+export interface SearchHit {
+	kind: 'post' | 'prompt' | 'feedback' | 'deliverable';
+	/** The post, prompt or feedback id; the path for a deliverable. */
+	id: string;
+	projectSlug: string;
+	projectName: string;
+	title: string;
+	threadSlug: string | null;
+	createdAt: string;
 	snippet: string;
 }
+
+// ---- settings, sync, screenshots --------------------------------------------------------------------
 
 export interface SyncStatus {
 	configured: boolean;
@@ -137,13 +267,22 @@ export interface SyncSettings {
 export interface ScreenshotSettings {
 	hotkey: string;
 	defaultHotkey: string;
-	uploadUrl: string;
-	/** Fixed by the LEDGER_SCREENSHOT_URL environment variable. */
-	uploadUrlLocked: boolean;
 	/** Why the saved hotkey isn't working, if it isn't. */
 	problem: string | null;
 	/** Something about this platform worth knowing (a missing permission, Wayland). */
 	note: string | null;
+}
+
+export interface Settings {
+	vaultPath: string;
+	/** Fixed by the LEDGER_VAULT environment variable. */
+	vaultLocked: boolean;
+	settingsFile: string;
+	secretsFile: string;
+	version: string;
+	sync: SyncSettings;
+	status: SyncStatus;
+	screenshot: ScreenshotSettings;
 }
 
 /** A dragged rectangle, in the capture's own pixels. */
@@ -154,22 +293,10 @@ export interface Region {
 	height: number;
 }
 
-/** The payload of the `screenshot-ready` event. */
-export interface ScreenshotResult {
-	url: string;
+/** The payload of the `screenshot-ready` event: a screenshot is waiting to be attached to a thread. */
+export interface ScreenshotTaken {
 	width: number;
 	height: number;
-}
-
-export interface Settings {
-	vaultPath: string;
-	/** Fixed by the LEDGER_VAULT environment variable. */
-	vaultLocked: boolean;
-	envFile: string;
-	version: string;
-	sync: SyncSettings;
-	status: SyncStatus;
-	screenshot: ScreenshotSettings;
 }
 
 export interface StoryDraft {
@@ -178,6 +305,7 @@ export interface StoryDraft {
 	role: string;
 	want: string;
 	reason: string;
+	notes: string;
 	criteria: Criterion[];
 	threadSlugs: string[];
 }
@@ -187,8 +315,17 @@ export interface StoryUpdate {
 	role?: string;
 	want?: string;
 	reason?: string;
+	notes?: string;
 	criteria?: Criterion[];
+}
+
+/** For `storyId` and `threadSlug`, an empty string clears the link. */
+export interface TaskUpdate {
+	title?: string;
+	body?: string;
 	columnId?: string;
+	storyId?: string;
+	threadSlug?: string;
 }
 
 export type Bump = 'minor' | 'major';

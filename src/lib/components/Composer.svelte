@@ -1,15 +1,30 @@
 <script lang="ts">
+	import { open } from '@tauri-apps/plugin-dialog';
 	import { api } from '$lib/api';
 	import { plainText, time } from '$lib/format';
 	import { attempt, refresh } from '$lib/ui.svelte';
 	import type { Post } from '$lib/types';
 
 	let {
-		slug,
+		project,
+		thread,
 		replyTo,
 		oncancelreply,
-		onsent
-	}: { slug: string; replyTo: Post | null; oncancelreply: () => void; onsent: () => void } = $props();
+		onsent,
+		onprompt,
+		onfeedback,
+		onupload
+	}: {
+		project: string;
+		thread: string;
+		replyTo: Post | null;
+		oncancelreply: () => void;
+		onsent: () => void;
+		onprompt: () => void;
+		onfeedback: () => void;
+		/** Called with the paths of the files the person picked. */
+		onupload: (paths: string[]) => void;
+	} = $props();
 
 	let text = $state('');
 	let sending = $state(false);
@@ -17,7 +32,8 @@
 
 	// Replying focuses the box; so does arriving in a thread.
 	$effect(() => {
-		slug;
+		project;
+		thread;
 		replyTo;
 		input?.focus();
 	});
@@ -32,7 +48,7 @@
 		const body = text.trim();
 		if (!body || sending) return;
 		sending = true;
-		const post = await attempt(() => api.addPost(slug, body, replyTo?.id ?? null));
+		const post = await attempt(() => api.addPost(project, thread, body, replyTo?.id ?? null));
 		sending = false;
 		if (!post) return;
 		text = '';
@@ -40,6 +56,13 @@
 		await refresh();
 		onsent();
 		input.focus();
+	}
+
+	async function pickFiles() {
+		const picked = await attempt(() => open({ multiple: true, title: 'Upload files to this thread' }));
+		if (!picked) return;
+		const paths = Array.isArray(picked) ? picked : [picked];
+		if (paths.length) onupload(paths);
 	}
 
 	function onkeydown(e: KeyboardEvent) {
@@ -58,6 +81,11 @@
 			<button class="link" aria-label="Cancel reply" onclick={oncancelreply}>✕</button>
 		</div>
 	{/if}
+	<div class="toolbar">
+		<button class="btn small chip-ai" onclick={onprompt} title="Ask for a deliverable">Prompt…</button>
+		<button class="btn small chip-own" onclick={onfeedback} title="Give feedback on a deliverable">Feedback…</button>
+		<button class="btn small" onclick={pickFiles} title="Attach files to this thread">Upload files…</button>
+	</div>
 	<div class="input-row">
 		<textarea
 			bind:this={input}

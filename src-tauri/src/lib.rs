@@ -1,15 +1,17 @@
+mod board;
 mod commands;
 mod db;
-mod document_types;
-mod documents;
+mod deliverables;
 mod error;
+mod feedback;
 mod frontmatter;
 mod github;
 mod ids;
 mod markdown;
 mod models;
-mod planboard;
 mod posts;
+mod projects;
+mod prompts;
 mod screenshot;
 mod search;
 mod settings;
@@ -17,7 +19,9 @@ mod state;
 mod stories;
 mod sync;
 mod syncer;
+mod templates;
 mod threads;
+mod uploads;
 mod vault;
 
 #[cfg(test)]
@@ -28,6 +32,7 @@ mod tests_screenshot;
 mod tests_sync;
 #[cfg(test)]
 mod tests_vault;
+
 
 use std::sync::{Arc, Mutex};
 
@@ -65,14 +70,19 @@ pub fn run() {
             // If .env is filled in, this also starts with a sync.
             syncer.reconfigure(sync.as_ref());
 
-            app.manage(state::App::new(core, syncer, screenshot::Screenshots::new(config_dir)));
+            app.manage(state::App::new(core, syncer, screenshot::Screenshots::new()));
             screenshot::register_saved(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::render_markdown,
             commands::search,
-            commands::list_threads,
+            commands::list_projects,
+            commands::create_project,
+            commands::rename_project,
+            commands::get_project,
+            commands::save_readme,
+            commands::delete_project,
             commands::create_thread,
             commands::rename_thread,
             commands::get_thread,
@@ -82,24 +92,44 @@ pub fn run() {
             commands::add_post,
             commands::update_post,
             commands::delete_post,
-            commands::list_document_types,
-            commands::create_document_type,
-            commands::update_document_type,
-            commands::delete_document_type,
-            commands::list_documents,
-            commands::get_document,
-            commands::get_document_version,
-            commands::create_document,
-            commands::update_document,
-            commands::publish_document,
-            commands::start_drafting,
-            commands::delete_document,
-            commands::get_planboard,
-            commands::create_user_story,
-            commands::update_user_story,
-            commands::delete_user_story,
+            commands::create_prompt,
+            commands::update_prompt,
+            commands::delete_prompt,
+            commands::link_prompt_deliverable,
+            commands::unlink_prompt_deliverable,
+            commands::create_prompt_deliverable,
+            commands::add_feedback,
+            commands::set_feedback_status,
+            commands::update_feedback,
+            commands::delete_feedback,
+            commands::upload_files,
+            commands::update_upload,
+            commands::delete_upload,
+            commands::read_project_file,
+            commands::open_project_file,
+            commands::list_deliverables,
+            commands::get_deliverable,
+            commands::create_deliverable,
+            commands::save_deliverable,
+            commands::publish_deliverable,
+            commands::delete_deliverable,
+            commands::list_templates,
+            commands::project_templates,
+            commands::effective_templates,
+            commands::create_template,
+            commands::update_template,
+            commands::override_template,
+            commands::delete_template,
+            commands::list_stories,
+            commands::create_story,
+            commands::update_story,
+            commands::delete_story,
             commands::link_story_thread,
             commands::unlink_story_thread,
+            commands::get_board,
+            commands::create_task,
+            commands::update_task,
+            commands::delete_task,
             commands::add_column,
             commands::rename_column,
             commands::delete_column,
@@ -112,13 +142,16 @@ pub fn run() {
             commands::set_vault_path,
             commands::reload_vault,
             commands::check_vault_changes,
-            commands::save_screenshot_settings,
+            commands::save_screenshot_hotkey,
             commands::take_screenshot,
             commands::pause_screenshot_hotkey,
             commands::screenshot_image,
             commands::screenshot_overlay_ready,
             commands::screenshot_finish,
             commands::screenshot_cancel,
+            commands::pending_screenshot_image,
+            commands::attach_screenshot,
+            commands::discard_screenshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

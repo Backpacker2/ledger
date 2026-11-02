@@ -1,5 +1,5 @@
-//! The vault: what the files look like, that they round-trip, that they are written sparingly, and that a
-//! vault written by hand loads without complaint.
+//! The vault: what the files look like, that they round-trip, that they are written sparingly, that a vault
+//! written by hand loads without complaint, and where the settings and the secret live.
 
 use std::fs;
 use std::path::Path;
@@ -8,11 +8,11 @@ use rusqlite::Connection;
 use tempfile::tempdir;
 
 use crate::frontmatter::{self, MetaExt};
-use crate::models::{Bump, Criterion, StoryDraft, StoryUpdate};
+use crate::models::{Bump, Criterion, StoryDraft, TaskUpdate};
 use crate::posts::AddOptions;
 use crate::settings::{self, SyncEnv};
 use crate::vault::{self, Vault};
-use crate::{db, document_types, documents, planboard, posts, stories, threads};
+use crate::{board, db, deliverables, feedback, posts, projects, prompts, stories, templates, threads, uploads};
 
 fn write(root: &Path, rel: &str, text: &str) {
     let file = root.join(rel);
@@ -24,133 +24,180 @@ fn read(root: &Path, rel: &str) -> String {
     fs::read_to_string(root.join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"))
 }
 
+fn names(root: &Path, rel: &str) -> Vec<String> {
+    let mut names: Vec<_> = fs::read_dir(root.join(rel)).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+    names.sort();
+    names
+}
+
 fn open(root: &Path) -> (Vault, Connection) {
     let mut vault = Vault::open(root.to_path_buf()).unwrap();
     let conn = vault.load().unwrap();
     (vault, conn)
 }
 
-/// A vault with a bit of everything in it.
-fn populate(conn: &Connection) {
-    let interview = document_types::create(conn, "Interview", Some("after a call"), Some(&["Who?".into(), "Why: really?".into()])).unwrap().slug;
-    let alpha = threads::create(conn, "Alpha: the first").unwrap().slug;
-    let beta = threads::create(conn, "Beta").unwrap().slug;
-    threads::link(conn, &alpha, &beta).unwrap();
+/// A vault with a bit of everything in it. Returns the project and thread slugs.
+fn populate(conn: &Connection, root: &Path) -> (String, String) {
+    templates::create(conn, "", "Interview", "after a call", &["Who?".into(), "Why: really?".into()], "# Interview\n\n## Who\n").unwrap();
+    let project = projects::create(conn, "Acme").unwrap().slug;
+    templates::create(conn, &project, "House style", "", &[], "Short sentences.").unwrap();
+    projects::save_readme(conn, &project, "# Acme\n\nRead the call notes first.\n").unwrap();
 
-    let first = posts::add(conn, &alpha, "A note with **bold**\n\nand a second paragraph.", AddOptions::default()).unwrap();
-    posts::add(conn, &alpha, "A reply", AddOptions { reply_to_id: Some(first.id), ..Default::default() }).unwrap();
+    let alpha = threads::create(conn, &project, "Alpha: the first").unwrap().slug;
+    let beta = threads::create(conn, &project, "Beta").unwrap().slug;
+    threads::link(conn, &project, &alpha, &beta).unwrap();
 
-    let doc = documents::create(conn, &interview, "Call with Ana", Some(&alpha)).unwrap();
-    documents::update(conn, &doc.id, None, Some("# Heading\n\nSome *body*.")).unwrap();
-    documents::publish(conn, &doc.id, Bump::Minor, None).unwrap();
-    documents::update(conn, &doc.id, None, Some("# Heading\n\nA later body.")).unwrap();
-    documents::publish(conn, &doc.id, Bump::Major, None).unwrap();
-    documents::create(conn, &interview, "Loose draft", None).unwrap();
+    let first = posts::add(conn, &project, &alpha, "A note with **bold**\n\nand a second paragraph.", AddOptions::default()).unwrap();
+    posts::add(conn, &project, &alpha, "A reply", AddOptions { reply_to_id: Some(first.id), ..Default::default() }).unwrap();
 
-    let story = StoryDraft {
-        id: "MM01".into(),
-        summary: "Clarify pricing".into(),
-        role: "customer".into(),
-        want: "see prices".into(),
-        reason: "I can decide".into(),
-        criteria: vec![Criterion { text: "A page lists plans".into(), done: true }, Criterion { text: "Prices in euro".into(), done: false }],
-        thread_slugs: vec![alpha, beta],
-    };
-    stories::create(conn, story).unwrap();
-    stories::update(conn, "MM01", StoryUpdate { column_id: Some("drafting".into()), ..Default::default() }).unwrap();
-    planboard::add_column(conn, "In review").unwrap();
+    let prompt = prompts::create(conn, &project, &alpha, "Call summary", "Write up the call with Ana.", Some("interview")).unwrap();
+    let plan = deliverables::create(conn, &project, "Call summary", "# Call summary\n\nAna wants SSO.\n").unwrap();
+    prompts::link_deliverable(conn, &project, &alpha, &prompt.id, &plan.path).unwrap();
+    deliverables::publish(conn, root, &project, &plan.path, Bump::Major, None).unwrap();
+    feedback::add(conn, &project, &beta, &plan.path, "Add the date of the call.").unwrap();
+
+    uploads::add_bytes(conn, root, &project, &alpha, "site plan.png", b"\x89PNG....", "The site plan").unwrap();
+
+    stories::create(
+        conn,
+        &project,
+        StoryDraft {
+            id: "MM01".into(),
+            summary: "Clarify pricing".into(),
+            role: "customer".into(),
+            want: "see prices".into(),
+            reason: "I can decide".into(),
+            notes: "Raised on the first call.".into(),
+            criteria: vec![Criterion { text: "A page lists plans".into(), done: true }, Criterion { text: "Prices in euro".into(), done: false }],
+            thread_slugs: vec![alpha.clone(), beta],
+        },
+    )
+    .unwrap();
+    let task = board::create_task(conn, &project, "Draw the pricing page", "In figma.", Some("MM01"), Some(&alpha)).unwrap();
+    board::update_task(conn, &project, &task.id, TaskUpdate { column_id: Some("doing".into()), ..Default::default() }).unwrap();
+    board::add_column(conn, &project, "In review").unwrap();
+    (project, alpha)
 }
 
 /// Everything the screens would show, as one string.
-fn snapshot(conn: &Connection) -> String {
+fn snapshot(conn: &Connection, root: &Path) -> String {
     let mut out = String::new();
-    for t in threads::list(conn).unwrap() {
-        out += &format!("{:?}\n", threads::get(conn, &t.slug).unwrap());
-    }
-    out += &format!("{:?}\n{:?}\n", planboard::get(conn).unwrap(), document_types::list(conn).unwrap());
-    for d in documents::list_all(conn).unwrap() {
-        out += &format!("{:?}\n", documents::get(conn, &d.id).unwrap());
-        for v in documents::versions(conn, &d.id).unwrap() {
-            out += &format!("{:?}\n", documents::get_version(conn, &d.id, &v).unwrap());
+    for p in projects::list(conn).unwrap() {
+        out += &format!("{p:?}\n{:?}\n", projects::get(conn, &p.slug).unwrap());
+        for t in &p.threads {
+            out += &format!("{:?}\n", threads::get(conn, root, &p.slug, &t.slug).unwrap());
         }
+        // (a file's modified time is the disk's to say, so it is left out)
+        for d in deliverables::list(conn, &p.slug).unwrap() {
+            for path in std::iter::once(d.path.clone()).chain(d.versions.iter().map(|v| deliverables::snapshot_path(&d.path, v))) {
+                let v = deliverables::get(conn, &p.slug, &path).unwrap();
+                out += &format!("{} {} {:?} {:?} {:?} {:?} {:?}\n", v.path, v.kind, v.version, v.versions, v.body, v.prompts, v.feedback);
+            }
+        }
+        out += &format!("{:?}\n{:?}\n{:?}\n", stories::list(conn, &p.slug).unwrap(), board::get(conn, &p.slug).unwrap(), templates::for_project(conn, &p.slug).unwrap());
     }
-    out
+    out + &format!("{:?}\n", templates::list(conn, "").unwrap())
 }
 
 // ---- what the files look like -----------------------------------------------------------------------
 
 #[test]
-fn the_vault_is_folders_of_markdown_with_frontmatter() {
+fn the_vault_has_the_agreed_folder_structure() {
     let dir = tempdir().unwrap();
-    let (mut vault, conn) = open(dir.path());
-    populate(&conn);
-    vault.persist(&conn).unwrap();
     let root = dir.path();
+    let (mut vault, conn) = open(root);
+    let (p, t) = populate(&conn, root);
+    vault.persist(&conn).unwrap();
+    let project = format!("projects/{p}");
+    let thread = format!("{project}/threads/{t}");
 
-    let thread = read(root, "threads/alpha-the-first/thread.md");
-    assert!(thread.starts_with("---\n"), "{thread}");
-    assert!(thread.contains("title: 'Alpha: the first'") || thread.contains("title: \"Alpha: the first\""), "{thread}");
-    assert!(thread.contains("linkedThreadSlugs:") && thread.contains("- beta"), "{thread}");
+    // The project: its definition, its reading guide, and the folders hanging off it.
+    assert_eq!(names(root, &project), ["README.md", "attachments", "deliverables", "project.md", "tasks", "templates", "threads", "userstories"]);
+    let definition = read(root, &format!("{project}/project.md"));
+    assert!(definition.contains("name: Acme") && definition.contains("- id: backlog") && definition.contains("name: In review"), "{definition}");
+    assert_eq!(read(root, &format!("{project}/README.md")), "# Acme\n\nRead the call notes first.\n");
 
-    // Posts: one file each, named by id, body below the frontmatter.
-    let posts_dir = root.join("threads/alpha-the-first/posts");
-    let files: Vec<_> = fs::read_dir(&posts_dir).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
-    assert_eq!(files.len(), 6, "{files:?}"); // two notes, two seeded questions and two "version published" notes
-    let note = files.iter().map(|f| read(root, &format!("threads/alpha-the-first/posts/{f}"))).find(|t| t.contains("**bold**")).unwrap();
+    // A thread, and what is kept in it.
+    assert_eq!(names(root, &thread), ["posts", "prompts", "thread.md", "uploads"]);
+    let meta = read(root, &format!("{thread}/thread.md"));
+    assert!(meta.contains("title: 'Alpha: the first'") || meta.contains("title: \"Alpha: the first\""), "{meta}");
+    assert!(meta.contains("linkedThreadSlugs:") && meta.contains("- beta"), "{meta}");
+
+    let posts = names(root, &format!("{thread}/posts"));
+    assert_eq!(posts.len(), 5, "{posts:?}"); // two notes, two seeded questions, and the note that a version was published
+    let note = posts.iter().map(|f| read(root, &format!("{thread}/posts/{f}"))).find(|x| x.contains("**bold**")).unwrap();
     assert!(note.contains("createdAt:") && note.ends_with("and a second paragraph.\n"), "{note}");
-    let question = files.iter().map(|f| read(root, &format!("threads/alpha-the-first/posts/{f}"))).find(|t| t.contains("Guiding question")).unwrap();
-    assert!(question.contains("guidingQuestion: true"), "{question}");
 
-    assert!(read(root, "document-types/interview.md").contains("name: Interview"));
-    assert!(read(root, "document-types/interview.md").contains("- Who?"));
+    // A prompt, with the deliverables it produced.
+    let prompt_files = names(root, &format!("{thread}/prompts"));
+    assert_eq!(prompt_files.len(), 1);
+    let prompt = read(root, &format!("{thread}/prompts/{}", prompt_files[0]));
+    assert!(prompt.contains("title: Call summary") && prompt.contains("template: interview") && prompt.contains("- call-summary.md"), "{prompt}");
+    assert!(prompt.ends_with("Write up the call with Ana.\n"));
 
-    let doc = fs::read_dir(root.join("documents")).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect::<Vec<_>>();
-    assert!(doc.iter().any(|f| f.ends_with("@v0.1.md")) && doc.iter().any(|f| f.ends_with("@v1.0.md")), "{doc:?}");
-    let latest = doc.iter().find(|f| f.ends_with("@v1.0.md")).unwrap();
-    let text = read(root, &format!("documents/{latest}"));
-    assert!(text.contains("version: '1.0'") || text.contains("version: \"1.0\""), "versions must stay text:\n{text}");
-    assert!(text.contains("A later body."));
+    // Feedback lives in the thread it was written in and names the deliverable.
+    let beta = format!("{project}/threads/beta/feedback");
+    let feedback_file = names(root, &beta);
+    let text = read(root, &format!("{beta}/{}", feedback_file[0]));
+    assert!(text.contains("deliverable: call-summary.md") && text.contains("status: open") && text.ends_with("Add the date of the call.\n"), "{text}");
 
-    let story = read(root, "user-stories/MM01.md");
-    assert!(story.contains("columnId: drafting") && story.contains("text: A page lists plans") && story.contains("done: true"), "{story}");
-    assert!(story.contains("- alpha-the-first") && story.contains("- beta"), "{story}");
+    // An upload: a manifest in the thread, the file itself in the project's attachments.
+    let manifest_name = &names(root, &format!("{thread}/uploads"))[0];
+    let manifest = read(root, &format!("{thread}/uploads/{manifest_name}"));
+    assert!(manifest.contains("uploadedAt:") && manifest.contains("file: attachments/site plan.png") && manifest.ends_with("The site plan\n"), "{manifest}");
+    assert_eq!(fs::read(root.join(&project).join("attachments/site plan.png")).unwrap(), b"\x89PNG....");
 
-    let board = read(root, "planboard.md");
-    assert!(board.contains("name: Backlog") && board.contains("name: In review") && board.contains("backlogColumnId: backlog"), "{board}");
+    // Deliverables are written verbatim; a published version is tagged @v1.0.
+    assert_eq!(names(root, &format!("{project}/deliverables")), ["call-summary.md", "call-summary@v1.0.md"]);
+    assert_eq!(read(root, &format!("{project}/deliverables/call-summary.md")), "# Call summary\n\nAna wants SSO.\n");
 
-    // Local-only files are kept out of GitHub.
+    // Stories and tasks, and the two kinds of template.
+    let story = read(root, &format!("{project}/userstories/MM01.md"));
+    assert!(story.contains("text: A page lists plans") && story.contains("done: true") && story.contains("- alpha-the-first") && story.ends_with("Raised on the first call.\n"), "{story}");
+    let task_name = &names(root, &format!("{project}/tasks"))[0];
+    let task = read(root, &format!("{project}/tasks/{task_name}"));
+    assert!(task.contains("title: Draw the pricing page") && task.contains("columnId: doing") && task.contains("story: MM01") && task.contains("thread: alpha-the-first") && task.ends_with("In figma.\n"), "{task}");
+    assert_eq!(names(root, &format!("{project}/templates")), ["house-style.md"]);
+    let global = read(root, "templates/interview.md");
+    assert!(global.contains("name: Interview") && global.contains("trigger: after a call") && global.contains("- Who?") && global.ends_with("## Who\n"), "{global}");
+
+    // Settings and the secret are kept apart from the notes, and out of git.
     let ignore = read(root, ".gitignore");
-    assert!(ignore.lines().any(|l| l == ".env") && ignore.lines().any(|l| l == ".ledger/"), "{ignore}");
+    assert!(ignore.lines().any(|l| l == ".ledger/") && ignore.lines().any(|l| l == ".env"), "{ignore}");
 }
 
 #[test]
 fn what_is_written_loads_back_identically() {
     let dir = tempdir().unwrap();
-    let (mut vault, conn) = open(dir.path());
-    populate(&conn);
+    let root = dir.path();
+    let (mut vault, conn) = open(root);
+    populate(&conn, root);
     vault.persist(&conn).unwrap();
 
-    let (mut again, reloaded) = open(dir.path());
+    let (mut again, reloaded) = open(root);
     assert_eq!(vault::export(&conn).unwrap(), vault::export(&reloaded).unwrap());
-    assert_eq!(snapshot(&conn), snapshot(&reloaded));
+    assert_eq!(snapshot(&conn, root), snapshot(&reloaded, root));
     // Loading a vault that is already in order writes nothing.
     assert_eq!(again.persist(&reloaded).unwrap(), 0);
 }
 
 #[test]
-fn posts_made_in_the_same_instant_keep_their_order_after_a_reload() {
+fn things_made_in_the_same_instant_keep_their_order_after_a_reload() {
     let dir = tempdir().unwrap();
-    let (mut vault, conn) = open(dir.path());
+    let root = dir.path();
+    let (mut vault, conn) = open(root);
     let questions: Vec<String> = (1..=12).map(|n| format!("Question {n}?")).collect();
-    let t = document_types::create(&conn, "Many", None, Some(&questions)).unwrap().slug;
-    let thread = threads::create(&conn, "T").unwrap().slug;
-    documents::create(&conn, &t, "Doc", Some(&thread)).unwrap();
+    templates::create(&conn, "", "Many", "", &questions, "").unwrap();
+    let p = projects::create(&conn, "P").unwrap().slug;
+    let t = threads::create(&conn, &p, "T").unwrap().slug;
+    prompts::create(&conn, &p, &t, "", "Answer them all", Some("many")).unwrap();
     vault.persist(&conn).unwrap();
 
-    let (_, reloaded) = open(dir.path());
-    let bodies: Vec<_> = posts::list(&reloaded, &thread).unwrap().into_iter().map(|p| p.body).collect();
+    let (_, reloaded) = open(root);
+    let bodies: Vec<_> = posts::list(&reloaded, &p, &t).unwrap().into_iter().map(|x| x.body).collect();
     let expected: Vec<_> = questions.iter().map(|q| format!("**Guiding question (Many):** {q}")).collect();
     assert_eq!(bodies, expected);
+    assert_eq!(prompts::list(&reloaded, &p, &t).unwrap().len(), 1);
 }
 
 // ---- writing as little as possible ------------------------------------------------------------------
@@ -158,60 +205,97 @@ fn posts_made_in_the_same_instant_keep_their_order_after_a_reload() {
 #[test]
 fn persisting_touches_only_what_changed() {
     let dir = tempdir().unwrap();
-    let (mut vault, conn) = open(dir.path());
-    populate(&conn);
+    let root = dir.path();
+    let (mut vault, conn) = open(root);
+    let (p, t) = populate(&conn, root);
     assert!(vault.persist(&conn).unwrap() >= 15, "everything populate made is new");
     assert_eq!(vault.persist(&conn).unwrap(), 0);
 
-    let thread = threads::list(&conn).unwrap().into_iter().find(|t| t.slug == "beta").unwrap().slug;
-    let post = posts::add(&conn, &thread, "one more", AddOptions::default()).unwrap();
+    let post = posts::add(&conn, &p, &t, "one more", AddOptions::default()).unwrap();
     assert_eq!(vault.persist(&conn).unwrap(), 1);
     assert_eq!(vault.persist(&conn).unwrap(), 0);
 
-    posts::update(&conn, &thread, &post.id, "edited").unwrap();
+    posts::update(&conn, &p, &t, &post.id, "edited").unwrap();
     assert_eq!(vault.persist(&conn).unwrap(), 1);
-    assert!(read(dir.path(), &format!("threads/beta/posts/{}.md", post.id)).contains("edited"));
+    assert!(read(root, &format!("projects/{p}/threads/{t}/posts/{}.md", post.id)).contains("edited"));
+
+    projects::save_readme(&conn, &p, "# New guide\n").unwrap();
+    deliverables::save(&conn, &p, "call-summary.md", "# Call summary\n\nEdited.\n").unwrap();
+    assert_eq!(vault.persist(&conn).unwrap(), 3, "the reading guide, the project's updated time, and the deliverable");
+    assert_eq!(read(root, &format!("projects/{p}/deliverables/call-summary.md")), "# Call summary\n\nEdited.\n");
 }
 
 #[test]
 fn deleting_things_deletes_their_files_and_leaves_no_empty_folders() {
     let dir = tempdir().unwrap();
-    let (mut vault, conn) = open(dir.path());
-    populate(&conn);
+    let root = dir.path();
+    let (mut vault, conn) = open(root);
+    let (p, _) = populate(&conn, root);
     vault.persist(&conn).unwrap();
-    assert!(dir.path().join("threads/beta/thread.md").exists());
+    assert!(root.join(format!("projects/{p}/threads/beta/thread.md")).exists());
 
-    threads::delete(&conn, "beta").unwrap();
+    threads::delete(&conn, root, &p, "beta").unwrap();
     vault.persist(&conn).unwrap();
-    assert!(!dir.path().join("threads/beta").exists());
+    assert!(!root.join(format!("projects/{p}/threads/beta")).exists(), "feedback and links went with the thread");
 
-    stories::delete(&conn, "MM01").unwrap();
+    stories::delete(&conn, &p, "MM01").unwrap();
     vault.persist(&conn).unwrap();
-    assert!(!dir.path().join("user-stories/MM01.md").exists());
+    assert!(!root.join(format!("projects/{p}/userstories")).exists());
 
-    // Deleting a draft keeps its published versions.
-    let doc = documents::list_all(&conn).unwrap().into_iter().find(|d| d.title == "Call with Ana").unwrap();
-    documents::delete(&conn, &doc.id).unwrap();
+    // Deleting the current file keeps its published versions.
+    deliverables::delete(&conn, root, &p, "call-summary.md").unwrap();
     vault.persist(&conn).unwrap();
-    assert!(!dir.path().join(format!("documents/{}.md", doc.id)).exists());
-    assert!(dir.path().join(format!("documents/{}@v1.0.md", doc.id)).exists());
+    assert_eq!(names(root, &format!("projects/{p}/deliverables")), ["call-summary@v1.0.md"]);
+}
+
+#[test]
+fn deleting_a_project_removes_its_folder_with_the_files_the_database_does_not_own() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    let (mut vault, conn) = open(root);
+    let (p, _) = populate(&conn, root);
+    let other = projects::create(&conn, "Other").unwrap().slug;
+    let folder = deliverables::deliverables_dir(root, &p);
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join("chart.png"), [1u8]).unwrap();
+    vault.persist(&conn).unwrap();
+
+    projects::delete(&conn, &p).unwrap();
+    vault.persist(&conn).unwrap();
+    assert!(root.join(format!("projects/{p}/attachments/site plan.png")).exists(), "attachments are not the database's to delete");
+    vault.remove_project_dir(&p).unwrap();
+    assert!(!root.join(format!("projects/{p}")).exists());
+    assert!(root.join(format!("projects/{other}/project.md")).exists());
+    assert!(root.join("templates/interview.md").exists(), "vault-wide templates stay");
 }
 
 #[test]
 fn files_the_app_does_not_manage_are_left_alone() {
     let dir = tempdir().unwrap();
-    write(dir.path(), "notes/my own note.md", "mine");
-    write(dir.path(), "threads/alpha/notes.txt", "not a post");
-    write(dir.path(), "README.md", "# my vault");
-    let (mut vault, conn) = open(dir.path());
-    threads::create(&conn, "New").unwrap();
+    let root = dir.path();
+    write(root, "notes/my own note.md", "mine");
+    write(root, "README.md", "# my vault");
+    write(root, "projects/acme/notes.md", "loose note");
+    write(root, "projects/acme/attachments/readme.md", "an uploaded markdown file, not a note");
+    let (mut vault, conn) = open(root);
+    assert!(!vault.changed_on_disk());
+
+    let t = threads::create(&conn, "acme", "New").unwrap().slug;
     vault.persist(&conn).unwrap();
-    threads::delete(&conn, "new").unwrap();
+    threads::delete(&conn, root, "acme", &t).unwrap();
     vault.persist(&conn).unwrap();
 
-    assert_eq!(read(dir.path(), "notes/my own note.md"), "mine");
-    assert_eq!(read(dir.path(), "threads/alpha/notes.txt"), "not a post");
-    assert_eq!(read(dir.path(), "README.md"), "# my vault");
+    assert_eq!(read(root, "notes/my own note.md"), "mine");
+    assert_eq!(read(root, "README.md"), "# my vault");
+    assert_eq!(read(root, "projects/acme/notes.md"), "loose note");
+    assert_eq!(read(root, "projects/acme/attachments/readme.md"), "an uploaded markdown file, not a note");
+    assert!(threads::list(&conn, "acme").unwrap().is_empty(), "an attachment is never read as a note");
+
+    // Attachments aren't watched; a deliverable is.
+    write(root, "projects/acme/attachments/new.png", "x");
+    assert!(!vault.changed_on_disk());
+    write(root, "projects/acme/deliverables/report.pdf", "%PDF");
+    assert!(vault.changed_on_disk());
 }
 
 // ---- a vault written by hand ------------------------------------------------------------------------
@@ -221,90 +305,131 @@ fn a_hand_written_vault_loads_and_is_repaired() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    // A thread folder with no thread.md; a post with no frontmatter and one with numbers where text goes.
-    write(root, "threads/ideas/posts/first.md", "Just a plain markdown file.");
-    write(root, "threads/ideas/posts/second.md", "---\nid: 7\nparentId: first\ncreatedAt: 2026-01-02T03:04:05.000Z\n---\n\nA reply to the plain file.\n");
-    // Frontmatter that is not a mapping is not frontmatter: the file is all body.
-    write(root, "threads/ideas/posts/odd.md", "---\n- a list\n- not a mapping\n---\nbody text");
-    // A thread that links to one that does not exist, and to itself.
-    write(root, "threads/real/thread.md", "---\ntitle: Real thread\nlinkedThreadSlugs:\n  - ideas\n  - ghost\n  - real\n---\n");
+    // A project with no project.md, whose threads have no thread.md; a post with no frontmatter and one with
+    // numbers where text goes.
+    write(root, "projects/ideas/threads/first/posts/a.md", "Just a plain markdown file.");
+    write(root, "projects/ideas/threads/first/posts/b.md", "---\nid: 7\nparentId: a\ncreatedAt: 2026-01-02T03:04:05.000Z\n---\n\nA reply to the plain file.\n");
+    write(root, "projects/ideas/threads/first/posts/odd.md", "---\n- a list\n- not a mapping\n---\nbody text");
+    write(root, "projects/ideas/threads/second/thread.md", "---\ntitle: Second thread\nlinkedThreadSlugs:\n  - first\n  - ghost\n  - second\n---\n");
 
-    // A document whose type is not defined, whose thread is gone, and with an unquoted version.
-    write(root, "documents/doc1.md", "---\ntitle: Orphan\ndocumentTypeSlug: mystery\nthreadSlug: ghost\nversion: 1.5\n---\n\nBody.\n");
-    write(root, "documents/doc1@v1.5.md", "---\ntitle: Orphan\ndocumentTypeSlug: mystery\n---\nOld body");
-    write(root, "documents/doc1@vnonsense.md", "ignored");
+    // A prompt from a template that does not exist, listing a deliverable that is there and one that is not.
+    write(root, "projects/ideas/threads/first/prompts/p1.md", "---\ntitle: Brief\ntemplate: ghost\ndeliverables:\n  - x.md\n  - missing.pdf\n---\n\nWrite the brief.\n");
+    write(root, "projects/ideas/threads/first/prompts/p2.md", "---\ntitle: empty\n---\n");
+    // Feedback needs a deliverable; the status is lenient.
+    write(root, "projects/ideas/threads/first/feedback/f1.md", "---\nstatus: open\n---\nFeedback on nothing.");
+    write(root, "projects/ideas/threads/first/feedback/f2.md", "---\ndeliverable: x.md\nstatus: weird\n---\n\nToo long.\n");
+    write(root, "projects/ideas/threads/first/uploads/u1.md", "---\nfile: attachments/a.png\nuploadedAt: 2026-02-03T04:05:06.000Z\n---\n\nA diagram.\n");
+    write(root, "projects/ideas/threads/first/uploads/u2.md", "---\nuploadedAt: 2026-02-03T04:05:06.000Z\n---\nno file, so no upload");
 
-    // A story with a column and a thread that do not exist, and criteria written in a loose style.
-    write(
-        root,
-        "user-stories/HAND-1.md",
-        "---\nsummary: By hand\ncolumnId: nowhere\nthreadSlugs: [ideas, ghost]\ncriteria:\n  - text: first\n    done: true\n  - text: second\n  - done: true\n---\n",
-    );
-    // Columns and the backlog written by hand.
-    write(root, "planboard.md", "---\ncolumns:\n  - name: Todo\n  - id: doing\n    name: Doing\nbacklogColumnId: doing\n---\n");
+    // Deliverables of every kind, nested ones included; a markdown one keeps its own frontmatter.
+    write(root, "projects/ideas/deliverables/x.md", "---\ntitle: X\nauthor: me\n---\n\n# The brief\n");
+    write(root, "projects/ideas/deliverables/x@v1.0.md", "# The brief, v1\n");
+    write(root, "projects/ideas/deliverables/sub/data.csv", "a,b\n1,2\n");
+    write(root, "projects/ideas/deliverables/diagram.png", "not really a png");
+
+    // A story and tasks pointing at things that don't exist.
+    write(root, "projects/ideas/userstories/HAND-1.md", "---\nsummary: By hand\nthreadSlugs: [first, ghost]\ncriteria:\n  - text: first\n    done: true\n  - text: second\n  - done: true\n---\n");
+    write(root, "projects/ideas/tasks/t1.md", "---\ntitle: Do it\ncolumnId: nowhere\nstory: ghost\nthread: ghost\n---\nWith notes.");
+    write(root, "projects/ideas/tasks/t2.md", "---\ncolumnId: doing\n---\nno title, so no task");
+    write(root, "projects/ideas/project.md", "---\nname: Ideas\ncolumns:\n  - name: Todo\n  - id: doing\n    name: Doing\nbacklogColumnId: doing\n---\nAbout the project.\n");
+
+    // A project that is nothing but a reading guide, and templates in both scopes.
+    write(root, "projects/bare/README.md", "# Bare\n\nJust a guide.");
+    write(root, "templates/memo.md", "---\nname: Memo\nquestions: Who is it for?\n---\n\n# Memo\n");
+    write(root, "projects/ideas/templates/memo.md", "---\nname: Ideas memo\n---\nProject memo.");
 
     let (_, conn) = open(root);
 
-    let ideas = threads::get(&conn, "ideas").unwrap();
-    assert_eq!(ideas.title, "ideas");
-    let bodies: Vec<_> = ideas.posts.iter().map(|p| (p.id.as_str(), p.body.as_str(), p.parent_id.as_deref())).collect();
-    assert!(bodies.contains(&("first", "Just a plain markdown file.", None)), "{bodies:?}");
-    assert!(bodies.contains(&("7", "A reply to the plain file.", Some("first"))), "{bodies:?}");
-    assert!(ideas.posts.iter().any(|p| p.id == "odd" && p.body.contains("not a mapping")), "{bodies:?}");
+    let listed: Vec<_> = projects::list(&conn).unwrap().into_iter().map(|p| (p.slug, p.name)).collect();
+    assert_eq!(listed, [("bare".to_string(), "bare".to_string()), ("ideas".to_string(), "Ideas".to_string())]);
+    assert_eq!(projects::get(&conn, "bare").unwrap().readme, "# Bare\n\nJust a guide.");
+    assert_eq!(projects::get(&conn, "ideas").unwrap().description, "About the project.");
+    assert!(projects::get(&conn, "ideas").unwrap().readme.starts_with("# Ideas"), "a missing README is started");
 
-    // Links count when either side lists them; links to nothing and to oneself are dropped.
-    let real = threads::get(&conn, "real").unwrap();
-    assert_eq!(real.linked_threads.len(), 1);
-    assert_eq!(real.linked_threads[0].slug, "ideas");
-    assert_eq!(threads::get(&conn, "ideas").unwrap().linked_threads[0].slug, "real");
+    let first = threads::get(&conn, root, "ideas", "first").unwrap();
+    assert_eq!(first.title, "first");
+    let bodies: Vec<_> = first.posts.iter().map(|p| (p.id.as_str(), p.body.as_str(), p.parent_id.as_deref())).collect();
+    assert!(bodies.contains(&("a", "Just a plain markdown file.", None)), "{bodies:?}");
+    assert!(bodies.contains(&("7", "A reply to the plain file.", Some("a"))), "{bodies:?}");
+    assert!(first.posts.iter().any(|p| p.id == "odd" && p.body.contains("not a mapping")));
+    let second = threads::get(&conn, root, "ideas", "second").unwrap();
+    assert_eq!((second.title.as_str(), second.linked_threads.len(), first.linked_threads.len()), ("Second thread", 1, 1), "links count from either side and dangling ones are dropped");
 
-    let doc = documents::get(&conn, "doc1").unwrap();
-    assert_eq!((doc.document_type_slug.as_str(), doc.document_type_name.as_str()), ("mystery", "mystery"));
-    assert!(doc.thread_slug.is_none());
-    assert_eq!(doc.version.as_deref(), Some("1.5"));
-    assert_eq!(doc.versions, ["1.5"]);
-    assert_eq!(documents::get_version(&conn, "doc1", "1.5").unwrap().body, "Old body");
+    assert_eq!(first.prompts.len(), 1, "an empty prompt is not a prompt");
+    let prompt = &first.prompts[0];
+    assert_eq!((prompt.title.as_str(), prompt.template_id.as_deref(), prompt.template_name.as_deref()), ("Brief", Some("ghost"), None));
+    assert_eq!(prompt.deliverables.iter().map(|d| (d.path.as_str(), d.exists)).collect::<Vec<_>>(), [("x.md", true), ("missing.pdf", false)]);
+    assert_eq!(first.feedback.len(), 1);
+    assert_eq!((first.feedback[0].deliverable_path.as_str(), first.feedback[0].status.as_str()), ("x.md", "open"));
+    assert_eq!(first.uploads.len(), 1);
+    assert_eq!((first.uploads[0].name.as_str(), first.uploads[0].description.as_str(), first.uploads[0].exists, first.uploads[0].image), ("a.png", "A diagram.", false, true));
 
-    let story = stories::get(&conn, "HAND-1").unwrap();
-    assert_eq!(story.column_id, "doing"); // "nowhere" does not exist, so the story lands in the backlog column
+    let listed: Vec<_> = deliverables::list(&conn, "ideas").unwrap().into_iter().map(|d| (d.path, d.kind, d.versions)).collect();
+    assert_eq!(
+        listed,
+        [
+            ("sub/data.csv".to_string(), "other".to_string(), vec![]),
+            ("diagram.png".to_string(), "image".to_string(), vec![]),
+            ("x.md".to_string(), "markdown".to_string(), vec!["1.0".to_string()]),
+        ]
+    );
+    let x = deliverables::get(&conn, "ideas", "x.md").unwrap();
+    assert_eq!(x.body.as_deref(), Some("---\ntitle: X\nauthor: me\n---\n\n# The brief\n"), "markdown deliverables are kept verbatim");
+    let html = x.html.unwrap();
+    assert!(html.contains("<h1>The brief</h1>") && !html.contains("author: me"), "the page shows the document, not its frontmatter");
+    assert!(deliverables::get(&conn, "ideas", "diagram.png").unwrap().body.is_none());
+
+    let story = stories::get(&conn, "ideas", "HAND-1").unwrap();
     assert_eq!(story.threads.len(), 1);
     assert_eq!(story.criteria.iter().map(|c| (c.text.as_str(), c.done)).collect::<Vec<_>>(), [("first", true), ("second", false)]);
 
-    let board = planboard::get(&conn).unwrap();
+    let board = board::get(&conn, "ideas").unwrap();
     assert_eq!(board.columns.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), ["todo", "doing"]);
     assert_eq!(board.backlog_column_id, "doing");
+    assert_eq!(board.tasks.len(), 1, "a task without a title is skipped");
+    let task = &board.tasks[0];
+    assert_eq!((task.title.as_str(), task.column_id.as_str(), task.story_id.clone(), task.thread_slug.clone(), task.body.as_str()), ("Do it", "doing", None, None, "With notes."));
+
+    assert_eq!(templates::get(&conn, "", "memo").unwrap().questions, ["Who is it for?"]);
+    assert_eq!(templates::find(&conn, "ideas", "memo").unwrap().name, "Ideas memo");
+    assert!(templates::find(&conn, "bare", "memo").unwrap().scope.is_empty());
 
     // The repairs are written back, and a second load agrees with the first.
-    assert!(root.join("threads/ideas/thread.md").exists());
-    assert!(root.join("document-types/mystery.md").exists());
-    let (_, again) = open(root);
-    assert_eq!(snapshot(&conn), snapshot(&again));
+    assert!(root.join("projects/ideas/threads/first/thread.md").exists());
+    assert!(root.join("projects/bare/project.md").exists());
+    assert!(root.join("projects/ideas/README.md").exists());
+    let (mut again_vault, again) = open(root);
+    assert_eq!(snapshot(&conn, root), snapshot(&again, root));
+    assert_eq!(again_vault.persist(&again).unwrap(), 0);
+    assert_eq!(read(root, "projects/ideas/deliverables/x.md"), "---\ntitle: X\nauthor: me\n---\n\n# The brief\n", "not rewritten");
 }
 
 #[test]
 fn a_story_id_that_differs_only_in_case_is_not_loaded_twice() {
     let dir = tempdir().unwrap();
-    write(dir.path(), "user-stories/AB-1.md", "---\nsummary: upper\n---\n");
-    write(dir.path(), "user-stories/ab-1.md", "---\nsummary: lower\n---\n");
+    write(dir.path(), "projects/p/userstories/AB-1.md", "---\nsummary: upper\n---\n");
+    write(dir.path(), "projects/p/userstories/ab-1.md", "---\nsummary: lower\n---\n");
     let (_, conn) = open(dir.path());
-    assert_eq!(stories::list(&conn).unwrap().len(), 1);
+    assert_eq!(stories::list(&conn, "p").unwrap().len(), 1);
 }
 
 #[test]
 fn edits_made_outside_the_app_are_noticed() {
     let dir = tempdir().unwrap();
-    let (mut vault, conn) = open(dir.path());
-    threads::create(&conn, "Watched").unwrap();
+    let root = dir.path();
+    let (mut vault, conn) = open(root);
+    projects::create(&conn, "Watched").unwrap();
+    threads::create(&conn, "watched", "T").unwrap();
     vault.persist(&conn).unwrap();
     assert!(!vault.changed_on_disk());
 
-    write(dir.path(), "threads/watched/posts/new.md", "Added in another editor.");
+    write(root, "projects/watched/threads/t/posts/new.md", "Added in another editor.");
     assert!(vault.changed_on_disk());
     let conn = vault.load().unwrap();
     assert!(!vault.changed_on_disk());
-    assert_eq!(posts::list(&conn, "watched").unwrap()[0].body, "Added in another editor.");
+    assert_eq!(posts::list(&conn, "watched", "t").unwrap()[0].body, "Added in another editor.");
 
-    fs::remove_file(dir.path().join("threads/watched/posts/new.md")).unwrap();
+    fs::remove_file(root.join("projects/watched/threads/t/posts/new.md")).unwrap();
     assert!(vault.changed_on_disk());
 }
 
@@ -312,15 +437,16 @@ fn edits_made_outside_the_app_are_noticed() {
 fn a_large_vault_persists_quickly() {
     let dir = tempdir().unwrap();
     let (mut vault, conn) = open(dir.path());
-    let thread = threads::create(&conn, "Big").unwrap().slug;
+    let p = projects::create(&conn, "Big").unwrap().slug;
+    let t = threads::create(&conn, &p, "Big").unwrap().slug;
     for n in 0..2000 {
-        posts::add(&conn, &thread, &format!("Post number {n} with a little text in it."), AddOptions::default()).unwrap();
+        posts::add(&conn, &p, &t, &format!("Post number {n} with a little text in it."), AddOptions::default()).unwrap();
     }
     let started = std::time::Instant::now();
     vault.persist(&conn).unwrap();
     println!("first persist of 2000 posts: {:?}", started.elapsed());
 
-    posts::add(&conn, &thread, "one more", AddOptions::default()).unwrap();
+    posts::add(&conn, &p, &t, "one more", AddOptions::default()).unwrap();
     let started = std::time::Instant::now();
     assert_eq!(vault.persist(&conn).unwrap(), 1);
     let elapsed = started.elapsed();
@@ -330,7 +456,7 @@ fn a_large_vault_persists_quickly() {
     let started = std::time::Instant::now();
     let (_, reloaded) = open(dir.path());
     println!("load of 2001 posts: {:?}", started.elapsed());
-    assert_eq!(posts::list(&reloaded, &thread).unwrap().len(), 2001);
+    assert_eq!(posts::list(&reloaded, &p, &t).unwrap().len(), 2001);
 }
 
 // ---- frontmatter ------------------------------------------------------------------------------------
@@ -372,28 +498,52 @@ fn frontmatter_reading_is_lenient() {
     assert_eq!(frontmatter::parse("---\nid: 1\n---\n").unwrap().body, "");
 }
 
-// ---- settings ---------------------------------------------------------------------------------------
+// ---- settings and secrets ---------------------------------------------------------------------------
 
 #[test]
-fn env_settings_are_read_written_and_kept_out_of_git() {
+fn settings_live_in_the_ledger_folder_and_the_token_in_its_env_file() {
     let dir = tempdir().unwrap();
     let root = dir.path();
     assert_eq!(settings::read_env(root), SyncEnv::default());
     assert!(settings::read_env(root).complete().is_none());
 
-    fs::write(root.join(".env"), "# mine\nOTHER=keep me\nGITHUB_REPO = \"me/notes\"\nexport GITHUB_BRANCH='ledger'\nGITHUB_TOKEN=\n").unwrap();
-    let env = settings::read_env(root);
-    assert_eq!((env.repo.as_str(), env.branch.as_str(), env.token.as_str()), ("me/notes", "ledger", ""));
-    assert!(env.complete().is_none(), "a missing token means sync is off");
-
+    settings::update_settings(root, |s| s.screenshot_hotkey = Some("Alt+F9".into())).unwrap();
     settings::write_env(root, &SyncEnv { repo: "me/notes".into(), branch: "main".into(), token: "github_pat_abc".into() }).unwrap();
-    let text = read(root, ".env");
-    assert!(text.contains("# mine") && text.contains("OTHER=keep me"), "{text}");
-    assert_eq!(text.matches("GITHUB_BRANCH").count(), 1, "{text}");
+
+    // Repository and branch are settings; the token is the secret and nothing else is in its file.
+    let json = read(root, ".ledger/settings.json");
+    assert!(json.contains("\"repo\": \"me/notes\"") && json.contains("\"branch\": \"main\"") && json.contains("Alt+F9"), "{json}");
+    assert!(!json.contains("github_pat_abc"), "the token never goes in settings.json");
+    let secrets = read(root, ".ledger/.env");
+    assert!(secrets.contains("GITHUB_TOKEN=github_pat_abc") && !secrets.contains("me/notes"), "{secrets}");
+
     let config = settings::read_env(root).complete().unwrap();
     assert_eq!((config.repo.as_str(), config.branch.as_str(), config.token.as_str()), ("me/notes", "main", "github_pat_abc"));
+    assert_eq!(settings::read_settings(root).screenshot_hotkey.as_deref(), Some("Alt+F9"), "saving sync settings keeps the others");
 
-    assert!(read(root, ".gitignore").lines().any(|l| l == ".env"));
+    // Neither file is ever pushed.
+    assert!(read(root, ".gitignore").lines().any(|l| l == ".ledger/"));
+    let ignore = crate::sync::Ignore::load(root);
+    assert!(ignore.is_ignored(".ledger/settings.json", false) && ignore.is_ignored(".ledger/.env", false));
+
+    // Turning sync off removes the token and leaves the rest.
+    settings::write_env(root, &SyncEnv { repo: "me/notes".into(), branch: "main".into(), token: String::new() }).unwrap();
+    assert!(settings::read_env(root).complete().is_none());
+    assert_eq!(settings::read_env(root).repo, "me/notes");
+}
+
+#[test]
+fn an_env_file_keeps_lines_that_are_not_the_token() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    write(root, ".ledger/.env", "# mine\nOTHER=keep me\nexport GITHUB_TOKEN = \"old-token\"\n");
+    assert_eq!(settings::read_env(root).token, "old-token");
+
+    settings::write_env(root, &SyncEnv { repo: "me/notes".into(), branch: "main".into(), token: "new-token".into() }).unwrap();
+    let text = read(root, ".ledger/.env");
+    assert!(text.contains("# mine") && text.contains("OTHER=keep me"), "{text}");
+    assert_eq!(text.matches("GITHUB_TOKEN").count(), 1, "{text}");
+    assert_eq!(settings::read_env(root).token, "new-token");
 }
 
 #[test]
@@ -402,8 +552,7 @@ fn an_existing_gitignore_is_extended_not_replaced() {
     fs::write(dir.path().join(".gitignore"), "drafts/\n*.bak").unwrap();
     settings::ensure_gitignore(dir.path()).unwrap();
     settings::ensure_gitignore(dir.path()).unwrap();
-    let text = read(dir.path(), ".gitignore");
-    assert_eq!(text, "drafts/\n*.bak\n.env\n.ledger/\n");
+    assert_eq!(read(dir.path(), ".gitignore"), "drafts/\n*.bak\n.ledger/\n.env\n");
 }
 
 #[test]
@@ -431,8 +580,6 @@ fn the_vault_location_is_remembered_in_the_app_config() {
         assert_eq!((path, locked), (docs.path().join("Ledger"), false));
         let chosen = config.path().join("elsewhere");
         settings::update_config(config.path(), |c| c.vault_path = Some(chosen.display().to_string())).unwrap();
-        settings::update_config(config.path(), |c| c.screenshot_hotkey = Some("Alt+F9".into())).unwrap();
-        assert_eq!(settings::load_config(config.path()).vault_path.as_deref(), Some(chosen.to_str().unwrap()), "other settings survive an update");
         assert_eq!(settings::resolve_vault(config.path(), None).0, chosen);
     }
 }
@@ -445,7 +592,7 @@ fn moving_the_vault_copies_it_and_loads_the_new_place() {
     let target = new.path().join("moved");
 
     let mut core = crate::state::Core::open_at(old.path().to_path_buf(), config.path().to_path_buf(), false).unwrap();
-    threads::create(&core.conn, "Travelling").unwrap();
+    projects::create(&core.conn, "Travelling").unwrap();
     core.vault.persist(&core.conn).unwrap();
     settings::write_env(old.path(), &SyncEnv { repo: "me/notes".into(), branch: "main".into(), token: "secret-token".into() }).unwrap();
 
@@ -454,18 +601,16 @@ fn moving_the_vault_copies_it_and_loads_the_new_place() {
 
     core.set_vault(&target, true).unwrap();
     assert_eq!(core.vault.root(), target);
-    assert_eq!(threads::list(&core.conn).unwrap()[0].slug, "travelling");
-    assert!(target.join("threads/travelling/thread.md").exists());
-    assert_eq!(core.sync.as_ref().unwrap().repo, "me/notes", "the new vault's own .env decides sync");
-    assert!(old.path().join("threads/travelling/thread.md").exists(), "the old vault is left where it was");
+    assert_eq!(projects::list(&core.conn).unwrap()[0].slug, "travelling");
+    assert!(target.join("projects/travelling/project.md").exists());
+    assert_eq!(core.sync.as_ref().unwrap().repo, "me/notes", "the new vault's own .ledger folder decides sync");
+    assert!(old.path().join("projects/travelling/project.md").exists(), "the old vault is left where it was");
 
     // Without copying, an empty folder starts a fresh vault.
     let fresh = new.path().join("fresh");
     core.set_vault(&fresh, false).unwrap();
-    assert!(threads::list(&core.conn).unwrap().is_empty());
+    assert!(projects::list(&core.conn).unwrap().is_empty());
     assert!(core.sync.is_none());
     assert_eq!(settings::load_config(config.path()).vault_path.unwrap(), fresh.display().to_string());
-
-    // The planboard of a fresh vault is the default one.
-    assert_eq!(db::query_all(&core.conn, "SELECT name FROM planboard_columns ORDER BY position", [], |r| r.get::<_, String>(0)).unwrap(), ["Backlog", "Drafting", "Documented"]);
+    assert!(db::query_all(&core.conn, "SELECT slug FROM projects", [], |r| r.get::<_, String>(0)).unwrap().is_empty());
 }

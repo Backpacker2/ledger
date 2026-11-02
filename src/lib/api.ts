@@ -1,21 +1,28 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
+	Board,
 	Bump,
 	Column,
-	DocumentSummary,
-	DocumentType,
-	DocumentView,
-	Planboard,
+	Deliverable,
+	DeliverableSummary,
+	Feedback,
 	Post,
+	ProjectSummary,
+	ProjectView,
+	Prompt,
 	Region,
 	SearchHit,
+	Settings,
 	Story,
 	StoryDraft,
 	StoryUpdate,
-	Settings,
 	SyncStatus,
+	Task,
+	TaskUpdate,
+	Template,
 	ThreadSummary,
-	ThreadView
+	ThreadView,
+	Upload
 } from './types';
 
 /** Commands reject with a plain message; surface it as an `Error` so callers can `catch (e)` uniformly. */
@@ -34,53 +41,98 @@ export const api = {
 	renderMarkdown: (body: string) => call<string>('render_markdown', { body }),
 	search: (query: string) => call<SearchHit[]>('search', { query }),
 
+	// projects
+	listProjects: () => call<ProjectSummary[]>('list_projects'),
+	createProject: (name: string) => call<ProjectSummary>('create_project', { name }),
+	renameProject: (slug: string, name: string) => call<ProjectSummary>('rename_project', { slug, name }),
+	getProject: (slug: string) => call<ProjectView>('get_project', { slug }),
+	saveReadme: (slug: string, text: string) => call<ProjectView>('save_readme', { slug, text }),
+	deleteProject: (slug: string) => call<void>('delete_project', { slug }),
+
 	// threads
-	listThreads: () => call<ThreadSummary[]>('list_threads'),
-	createThread: (title: string) => call<ThreadSummary>('create_thread', { title }),
-	renameThread: (slug: string, title: string) => call<ThreadSummary>('rename_thread', { slug, title }),
-	getThread: (slug: string) => call<ThreadView>('get_thread', { slug }),
-	deleteThread: (slug: string) => call<void>('delete_thread', { slug }),
-	linkThreads: (slug: string, otherSlug: string) => call<void>('link_threads', { slug, otherSlug }),
-	unlinkThreads: (slug: string, otherSlug: string) => call<void>('unlink_threads', { slug, otherSlug }),
+	createThread: (project: string, title: string) => call<ThreadSummary>('create_thread', { project, title }),
+	renameThread: (project: string, slug: string, title: string) => call<ThreadSummary>('rename_thread', { project, slug, title }),
+	getThread: (project: string, slug: string) => call<ThreadView>('get_thread', { project, slug }),
+	deleteThread: (project: string, slug: string) => call<void>('delete_thread', { project, slug }),
+	linkThreads: (project: string, slug: string, otherSlug: string) => call<void>('link_threads', { project, slug, otherSlug }),
+	unlinkThreads: (project: string, slug: string, otherSlug: string) => call<void>('unlink_threads', { project, slug, otherSlug }),
 
 	// posts
-	addPost: (slug: string, body: string, replyToId: string | null = null) =>
-		call<Post>('add_post', { slug, body, replyToId }),
-	updatePost: (slug: string, id: string, body: string) => call<Post>('update_post', { slug, id, body }),
-	deletePost: (slug: string, id: string) => call<void>('delete_post', { slug, id }),
+	addPost: (project: string, thread: string, body: string, replyToId: string | null = null) =>
+		call<Post>('add_post', { project, thread, body, replyToId }),
+	updatePost: (project: string, thread: string, id: string, body: string) => call<Post>('update_post', { project, thread, id, body }),
+	deletePost: (project: string, thread: string, id: string) => call<void>('delete_post', { project, thread, id }),
 
-	// document types
-	listDocumentTypes: () => call<DocumentType[]>('list_document_types'),
-	createDocumentType: (name: string, trigger: string, questions: string[]) =>
-		call<DocumentType>('create_document_type', { name, trigger, questions }),
-	updateDocumentType: (slug: string, name: string, trigger: string, questions: string[]) =>
-		call<DocumentType>('update_document_type', { slug, name, trigger, questions }),
-	deleteDocumentType: (slug: string) => call<void>('delete_document_type', { slug }),
+	// prompts
+	createPrompt: (project: string, thread: string, title: string, body: string, templateId: string | null) =>
+		call<Prompt>('create_prompt', { project, thread, title, body, templateId }),
+	updatePrompt: (project: string, thread: string, id: string, title: string, body: string) =>
+		call<Prompt>('update_prompt', { project, thread, id, title, body }),
+	deletePrompt: (project: string, thread: string, id: string) => call<void>('delete_prompt', { project, thread, id }),
+	linkPromptDeliverable: (project: string, thread: string, id: string, path: string) =>
+		call<Prompt>('link_prompt_deliverable', { project, thread, id, path }),
+	unlinkPromptDeliverable: (project: string, thread: string, id: string, path: string) =>
+		call<Prompt>('unlink_prompt_deliverable', { project, thread, id, path }),
+	createPromptDeliverable: (project: string, thread: string, id: string, name: string) =>
+		call<Prompt>('create_prompt_deliverable', { project, thread, id, name }),
 
-	// documents
-	listDocuments: () => call<DocumentSummary[]>('list_documents'),
-	getDocument: (id: string) => call<DocumentView>('get_document', { id }),
-	getDocumentVersion: (id: string, version: string) => call<DocumentView>('get_document_version', { id, version }),
-	createDocument: (documentTypeSlug: string, title: string, threadSlug: string | null = null) =>
-		call<DocumentView>('create_document', { documentTypeSlug, title, threadSlug }),
-	updateDocument: (id: string, patch: { title?: string; body?: string }) =>
-		call<DocumentView>('update_document', { id, title: patch.title ?? null, body: patch.body ?? null }),
-	publishDocument: (id: string, bump: Bump, version: string | null = null) =>
-		call<DocumentView>('publish_document', { id, bump, version }),
-	startDrafting: (id: string, threadSlug: string | null, newThreadTitle: string | null) =>
-		call<DocumentView>('start_drafting', { id, threadSlug, newThreadTitle }),
-	deleteDocument: (id: string) => call<void>('delete_document', { id }),
+	// feedback
+	addFeedback: (project: string, thread: string, deliverablePath: string, body: string) =>
+		call<Feedback>('add_feedback', { project, thread, deliverablePath, body }),
+	setFeedbackStatus: (project: string, thread: string, id: string, status: 'open' | 'resolved') =>
+		call<Feedback>('set_feedback_status', { project, thread, id, status }),
+	updateFeedback: (project: string, thread: string, id: string, body: string) =>
+		call<Feedback>('update_feedback', { project, thread, id, body }),
+	deleteFeedback: (project: string, thread: string, id: string) => call<void>('delete_feedback', { project, thread, id }),
 
-	// planboard and user stories
-	getPlanboard: () => call<Planboard>('get_planboard'),
-	createUserStory: (draft: StoryDraft) => call<Story>('create_user_story', { draft }),
-	updateUserStory: (id: string, updates: StoryUpdate) => call<Story>('update_user_story', { id, updates }),
-	deleteUserStory: (id: string) => call<void>('delete_user_story', { id }),
-	linkStoryThread: (id: string, threadSlug: string) => call<Story>('link_story_thread', { id, threadSlug }),
-	unlinkStoryThread: (id: string, threadSlug: string) => call<Story>('unlink_story_thread', { id, threadSlug }),
-	addColumn: (name: string) => call<Column[]>('add_column', { name }),
-	renameColumn: (id: string, name: string) => call<Column[]>('rename_column', { id, name }),
-	deleteColumn: (id: string) => call<Column[]>('delete_column', { id }),
+	// uploads and project files
+	uploadFiles: (project: string, thread: string, paths: string[], description: string) =>
+		call<Upload[]>('upload_files', { project, thread, paths, description }),
+	updateUpload: (project: string, thread: string, id: string, description: string) =>
+		call<Upload>('update_upload', { project, thread, id, description }),
+	deleteUpload: (project: string, thread: string, id: string) => call<void>('delete_upload', { project, thread, id }),
+	/** A file in the project's folder ("attachments/…", "deliverables/…"), as raw bytes. */
+	readProjectFile: (project: string, path: string) => call<ArrayBuffer>('read_project_file', { project, path }),
+	openProjectFile: (project: string, path: string, reveal = false) => call<void>('open_project_file', { project, path, reveal }),
+
+	// deliverables
+	listDeliverables: (project: string) => call<DeliverableSummary[]>('list_deliverables', { project }),
+	getDeliverable: (project: string, path: string) => call<Deliverable>('get_deliverable', { project, path }),
+	createDeliverable: (project: string, name: string, body = '') => call<Deliverable>('create_deliverable', { project, name, body }),
+	saveDeliverable: (project: string, path: string, body: string) => call<Deliverable>('save_deliverable', { project, path, body }),
+	publishDeliverable: (project: string, path: string, bump: Bump, version: string | null = null) =>
+		call<Deliverable>('publish_deliverable', { project, path, bump, version }),
+	deleteDeliverable: (project: string, path: string) => call<void>('delete_deliverable', { project, path }),
+
+	// templates
+	listTemplates: (scope: string) => call<Template[]>('list_templates', { scope }),
+	projectTemplates: (project: string) => call<Template[]>('project_templates', { project }),
+	effectiveTemplates: (project: string) => call<Template[]>('effective_templates', { project }),
+	createTemplate: (scope: string, name: string, trigger: string, questions: string[], body: string) =>
+		call<Template>('create_template', { scope, name, trigger, questions, body }),
+	/** Copies a vault-wide template into the project under the same id, so the project can change its own. */
+	overrideTemplate: (project: string, id: string) => call<Template>('override_template', { project, id }),
+	updateTemplate: (scope: string, id: string, name: string, trigger: string, questions: string[], body: string) =>
+		call<Template>('update_template', { scope, id, name, trigger, questions, body }),
+	deleteTemplate: (scope: string, id: string) => call<void>('delete_template', { scope, id }),
+
+	// user stories
+	listStories: (project: string) => call<Story[]>('list_stories', { project }),
+	createStory: (project: string, draft: StoryDraft) => call<Story>('create_story', { project, draft }),
+	updateStory: (project: string, id: string, updates: StoryUpdate) => call<Story>('update_story', { project, id, updates }),
+	deleteStory: (project: string, id: string) => call<void>('delete_story', { project, id }),
+	linkStoryThread: (project: string, id: string, threadSlug: string) => call<Story>('link_story_thread', { project, id, threadSlug }),
+	unlinkStoryThread: (project: string, id: string, threadSlug: string) => call<Story>('unlink_story_thread', { project, id, threadSlug }),
+
+	// the board
+	getBoard: (project: string) => call<Board>('get_board', { project }),
+	createTask: (project: string, title: string, body: string, storyId: string | null, threadSlug: string | null) =>
+		call<Task>('create_task', { project, title, body, storyId, threadSlug }),
+	updateTask: (project: string, id: string, updates: TaskUpdate) => call<Task>('update_task', { project, id, updates }),
+	deleteTask: (project: string, id: string) => call<void>('delete_task', { project, id }),
+	addColumn: (project: string, name: string) => call<Column[]>('add_column', { project, name }),
+	renameColumn: (project: string, id: string, name: string) => call<Column[]>('rename_column', { project, id, name }),
+	deleteColumn: (project: string, id: string) => call<Column[]>('delete_column', { project, id }),
 
 	// the vault and GitHub sync
 	getSettings: () => call<Settings>('get_settings'),
@@ -96,13 +148,16 @@ export const api = {
 	checkVaultChanges: () => call<boolean>('check_vault_changes'),
 
 	// screenshots
-	saveScreenshotSettings: (hotkey: string, uploadUrl: string) =>
-		call<Settings>('save_screenshot_settings', { hotkey, uploadUrl }),
+	saveScreenshotHotkey: (hotkey: string) => call<Settings>('save_screenshot_hotkey', { hotkey }),
 	takeScreenshot: () => call<void>('take_screenshot'),
 	/** Lets go of the hotkey while it is being re-recorded, and takes it back afterwards. */
 	pauseScreenshotHotkey: (paused: boolean) => call<void>('pause_screenshot_hotkey', { paused }),
 	screenshotImage: () => call<ArrayBuffer>('screenshot_image'),
 	screenshotOverlayReady: () => call<void>('screenshot_overlay_ready'),
 	screenshotFinish: (region: Region) => call<void>('screenshot_finish', { region }),
-	screenshotCancel: () => call<void>('screenshot_cancel')
+	screenshotCancel: () => call<void>('screenshot_cancel'),
+	pendingScreenshotImage: () => call<ArrayBuffer>('pending_screenshot_image'),
+	attachScreenshot: (project: string, thread: string, description: string) =>
+		call<Upload>('attach_screenshot', { project, thread, description }),
+	discardScreenshot: () => call<void>('discard_screenshot')
 };

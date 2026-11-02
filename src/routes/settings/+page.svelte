@@ -15,7 +15,7 @@
 	/** The form's starting values, read once; edits stay local until saved. */
 	function start() {
 		const { sync, vaultPath, screenshot } = data.settings;
-		return { repo: sync.repo, branch: sync.branch || 'main', path: vaultPath, hotkey: screenshot.hotkey, uploadUrl: screenshot.uploadUrl };
+		return { repo: sync.repo, branch: sync.branch || 'main', path: vaultPath, hotkey: screenshot.hotkey };
 	}
 	const initial = start();
 
@@ -25,7 +25,6 @@
 	let vaultInput = $state(initial.path);
 	let copy = $state(true);
 	let hotkey = $state(initial.hotkey);
-	let uploadUrl = $state(initial.uploadUrl);
 	let shotError = $state<string | null>(null);
 	let busy = $state<'test' | 'save' | 'vault' | 'shot' | null>(null);
 	let result = $state<{ ok: boolean; message: string } | null>(null);
@@ -42,7 +41,7 @@
 	async function useFolder() {
 		const ok = await confirmDialog({
 			title: 'Switch vault?',
-			message: `Ledger will use ${vaultInput.trim()} from now on. ${copy ? 'If the folder is empty, your current notes are copied into it first. ' : ''}Your current vault is left where it is.`,
+			message: `Ledger will use ${vaultInput.trim()} from now on. ${copy ? 'If the folder is empty, your current vault is copied into it first. ' : ''}Your current vault is left where it is.`,
 			confirmLabel: 'Switch vault'
 		});
 		if (!ok) return;
@@ -95,7 +94,7 @@
 	async function disconnect() {
 		const ok = await confirmDialog({
 			title: 'Turn off GitHub sync?',
-			message: 'The access token is removed from this machine. Your notes stay where they are, here and on GitHub.',
+			message: 'The access token is removed from this machine. Your files stay where they are, here and on GitHub.',
 			confirmLabel: 'Turn off',
 			danger: true
 		});
@@ -109,14 +108,14 @@
 	// ---- screenshots ---------------------------------------------------------------------------
 
 	const screenshot = $derived(settings.screenshot);
-	const shotChanged = $derived(hotkey !== screenshot.hotkey || uploadUrl.trim() !== screenshot.uploadUrl);
+	const shotChanged = $derived(hotkey !== screenshot.hotkey);
 
 	async function saveScreenshot() {
 		busy = 'shot';
 		shotError = null;
 		try {
-			await api.saveScreenshotSettings(hotkey, uploadUrl);
-			toast('Screenshot settings saved');
+			await api.saveScreenshotHotkey(hotkey);
+			toast('Screenshot hotkey saved');
 			await refresh();
 		} catch (e) {
 			// A shortcut the system refuses stays on screen as a warning; the previous one keeps working.
@@ -170,12 +169,17 @@
 					<button class="btn primary" onclick={useFolder} disabled={busy === 'vault'}>Use this folder</button>
 				</div>
 			{/if}
-			<pre class="mono tree">threads/&lt;thread&gt;/thread.md           a thread
-threads/&lt;thread&gt;/posts/&lt;id&gt;.md      its posts
-documents/&lt;id&gt;.md, &lt;id&gt;@v1.0.md      drafts and published versions
-document-types/&lt;type&gt;.md             guiding questions
-user-stories/&lt;id&gt;.md                 stories and their criteria
-planboard.md                         the columns</pre>
+			<pre class="mono tree">projects/&lt;project&gt;/project.md                     a project
+projects/&lt;project&gt;/README.md                      its reading guide
+projects/&lt;project&gt;/threads/&lt;thread&gt;/thread.md      a thread, with posts/ prompts/
+                                                 feedback/ uploads/ (&lt;id&gt;.md each)
+projects/&lt;project&gt;/userstories/&lt;id&gt;.md          a user story
+projects/&lt;project&gt;/tasks/&lt;id&gt;.md                a task on the board
+projects/&lt;project&gt;/deliverables/                  what prompts produce (name@v1.0.md = published)
+projects/&lt;project&gt;/attachments/                   uploaded files and screenshots
+projects/&lt;project&gt;/templates/&lt;id&gt;.md            templates for this project
+templates/&lt;id&gt;.md                               templates for every project
+.ledger/                                         settings and secrets, never synced</pre>
 			<div><button class="btn small" onclick={reload}>Reload from disk</button></div>
 		</div>
 
@@ -248,10 +252,15 @@ planboard.md                         the columns</pre>
 						<dt>Problem</dt>
 						<dd class="error-text">{status.lastError}</dd>
 					{/if}
-					<dt>Saved in</dt>
-					<dd class="mono">{settings.envFile}</dd>
+					<dt>Settings</dt>
+					<dd class="mono">{settings.settingsFile}</dd>
+					<dt>Secret</dt>
+					<dd class="mono">{settings.secretsFile}</dd>
 				</div>
-				<div class="hint">That file stays on this machine: the vault's <code>.gitignore</code> lists it, so the token is never uploaded.</div>
+				<div class="hint">
+					Both files stay on this machine: they live in the vault’s <code>.ledger</code> folder, which the vault’s <code>.gitignore</code> lists,
+					so the repository, branch and token are never uploaded.
+				</div>
 				{#if settings.sync.configured}
 					<div class="row-end" style="justify-content:flex-start">
 						<button class="btn small" onclick={syncNow} disabled={status.state === 'syncing'}>Sync now</button>
@@ -264,7 +273,8 @@ planboard.md                         the columns</pre>
 		<div class="panel">
 			<h2>Screenshots</h2>
 			<p class="sub" style="margin:0">
-				Press the shortcut anywhere to capture the screen you're on, drag out the area you want, and the picture is uploaded and opened here.
+				Press the shortcut anywhere to capture the screen you're on and drag out the area you want. Ledger then asks which thread the picture
+				belongs to, and saves it in that project’s attachments folder.
 			</p>
 			<div class="form-row">
 				<div class="field grow">
@@ -274,21 +284,6 @@ planboard.md                         the columns</pre>
 				<button class="btn ghost" onclick={() => (hotkey = screenshot.defaultHotkey)} disabled={hotkey === screenshot.defaultHotkey}>
 					Reset to default
 				</button>
-			</div>
-			<label class="field">
-				Upload URL
-				<input
-					bind:value={uploadUrl}
-					disabled={screenshot.uploadUrlLocked}
-					placeholder="https://example.com/upload"
-					spellcheck="false"
-					autocomplete="off"
-				/>
-			</label>
-			<div class="hint">
-				The image is sent as a multipart form (field <code>file</code>, a PNG). The answer should be JSON with the image's link in
-				<code>url</code>, or just the link.
-				{#if screenshot.uploadUrlLocked}The address is fixed by <code>LEDGER_SCREENSHOT_URL</code>.{/if}
 			</div>
 			{#if shotError}
 				<div class="notice bad">{shotError}</div>

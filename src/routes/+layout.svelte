@@ -4,6 +4,7 @@
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/state';
 	import Dialogs from '$lib/components/Dialogs.svelte';
+	import ScreenshotModal from '$lib/components/ScreenshotModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Toasts from '$lib/components/Toasts.svelte';
 	import { drawer, initTheme, startBackendEvents } from '$lib/ui.svelte';
@@ -24,18 +25,19 @@
 {#if bare}
 	{@render children()}
 {:else}
-<div class="app">
-	<header class="topbar">
-		<button class="icon-btn" aria-label="Menu" onclick={() => (drawer.open = true)}>☰</button>
-		<span>Ledger</span>
-	</header>
-	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-	<div class="scrim" class:open={drawer.open} onclick={() => (drawer.open = false)}></div>
+	<div class="app">
+		<header class="topbar">
+			<button class="icon-btn" aria-label="Menu" onclick={() => (drawer.open = true)}>☰</button>
+			<span>Ledger</span>
+		</header>
+		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+		<div class="scrim" class:open={drawer.open} onclick={() => (drawer.open = false)}></div>
 
-	<Sidebar threads={data.threads} />
-	<main>{@render children()}</main>
-</div>
+		<Sidebar projects={data.projects} />
+		<main>{@render children()}</main>
+	</div>
 
-<Dialogs />
-<Toasts />
+	<ScreenshotModal projects={data.projects} />
+	<Dialogs />
+	<Toasts />
 {/if}

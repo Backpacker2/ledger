@@ -1,13 +1,15 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { api } from '$lib/api';
+	import { deliverableUrl, snapshotPath } from '$lib/actions';
 	import { dayKey, dayLabel, plainText, time } from '$lib/format';
 	import { attempt, confirmDialog, refresh } from '$lib/ui.svelte';
 	import type { Post } from '$lib/types';
 	import Markdown from './Markdown.svelte';
 
 	let {
-		slug,
+		project,
+		thread,
 		post,
 		byId,
 		variant = 'card',
@@ -16,7 +18,8 @@
 		onjump,
 		children
 	}: {
-		slug: string;
+		project: string;
+		thread: string;
 		post: Post;
 		byId: Record<string, Post>;
 		/** "answer" is a reply shown inside the guiding-question card it belongs to. */
@@ -24,7 +27,7 @@
 		/** A parent that is already visible as this card's container; no quote needed. */
 		quotedElsewhere?: string;
 		onreply: (post: Post) => void;
-		onjump: (id: string) => void;
+		onjump: (domId: string) => void;
 		children?: Snippet;
 	} = $props();
 
@@ -35,8 +38,8 @@
 	const parent = $derived(post.parentId ? byId[post.parentId] : undefined);
 	const showQuote = $derived(!!post.parentId && post.parentId !== quotedElsewhere);
 
-	// Seeded questions read "**Guiding question (Type):** …"; the card's label already says as much, so show
-	// the type there and only the question in the body.
+	// Seeded questions read "**Guiding question (Template):** …"; the card's label already says as much, so show
+	// the template there and only the question in the body.
 	const GUIDING_PREFIX = /^<p><strong>Guiding question \(([^)]*)\):<\/strong>\s*/;
 	const guidingType = $derived.by(() => {
 		const match = post.guidingQuestion ? post.html.match(GUIDING_PREFIX) : null;
@@ -52,7 +55,7 @@
 	async function save() {
 		if (!draft.trim()) return;
 		saving = true;
-		const done = await attempt(() => api.updatePost(slug, post.id, draft));
+		const done = await attempt(() => api.updatePost(project, thread, post.id, draft));
 		saving = false;
 		if (done) {
 			editing = false;
@@ -68,7 +71,7 @@
 			danger: true
 		});
 		if (!ok) return;
-		if ((await attempt(() => api.deletePost(slug, post.id))) !== undefined) await refresh();
+		if ((await attempt(() => api.deletePost(project, thread, post.id))) !== undefined) await refresh();
 	}
 
 	function onEditKeydown(e: KeyboardEvent) {
@@ -96,7 +99,7 @@
 
 	{#if showQuote}
 		{#if parent}
-			<button class="quote" onclick={() => onjump(parent.id)}>
+			<button class="quote" onclick={() => onjump(`p-${parent.id}`)}>
 				<span class="qhead">Reply to {time(parent.createdAt)}</span>
 				<span class="qtext">{plainText(parent.body)}</span>
 			</button>
@@ -118,8 +121,10 @@
 		{@render children?.()}
 		<div class="actions">
 			<button class="link accent" onclick={() => onreply(post)}>{post.guidingQuestion ? 'Answer' : 'Reply'}</button>
-			{#if post.versionPublished && post.documentId && post.documentVersion}
-				<a class="link accent" href="/documents/{post.documentId}?v={post.documentVersion}">View version {post.documentVersion}</a>
+			{#if post.versionPublished && post.deliverablePath && post.deliverableVersion}
+				<a class="link accent" href={deliverableUrl(project, snapshotPath(post.deliverablePath, post.deliverableVersion))}>
+					View version {post.deliverableVersion}
+				</a>
 			{:else}
 				<button class="link" onclick={startEdit}>Edit</button>
 			{/if}

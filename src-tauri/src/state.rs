@@ -110,22 +110,24 @@ impl App {
         self.core.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Answers from memory.
-    pub fn read<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
-        f(&self.lock().conn)
+    /// Answers from memory. The closure also gets the vault's root, for the files the database only points at.
+    pub fn read<T>(&self, f: impl FnOnce(&Connection, &Path) -> Result<T>) -> Result<T> {
+        let core = self.lock();
+        f(&core.conn, core.vault.root())
     }
 
     /// Changes memory, writes the difference through to the vault's files, and lets the sync worker know.
-    pub fn mutate<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
-        let (out, touched) = {
+    pub fn mutate<T>(&self, f: impl FnOnce(&Connection, &Path) -> Result<T>) -> Result<T> {
+        let out = {
             let mut guard = self.lock();
             let core = &mut *guard;
-            let out = f(&core.conn)?;
-            (out, core.vault.persist(&core.conn)?)
+            let out = f(&core.conn, core.vault.root())?;
+            core.vault.persist(&core.conn)?;
+            out
         };
-        if touched > 0 {
-            self.syncer.dirty();
-        }
+        // Always, not only when `persist` wrote something: some changes are made to files directly (a published
+        // image, an upload), which the write-through doesn't count.
+        self.syncer.dirty();
         Ok(out)
     }
 }

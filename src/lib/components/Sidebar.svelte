@@ -1,16 +1,51 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { newThreadFlow } from '$lib/actions';
+	import { newProjectFlow, newThreadFlow, projectUrl, threadUrl } from '$lib/actions';
 	import { ago } from '$lib/format';
 	import { drawer, sync } from '$lib/ui.svelte';
-	import type { ThreadSummary } from '$lib/types';
+	import type { ProjectSummary } from '$lib/types';
 
-	let { threads }: { threads: ThreadSummary[] } = $props();
+	let { projects }: { projects: ProjectSummary[] } = $props();
+
+	const OPEN_KEY = 'ledger-open-projects';
 
 	let query = $state('');
+	let open = $state<string[]>(load());
 	const path = $derived(page.url.pathname);
 	const on = (prefix: string) => path === prefix || path.startsWith(prefix + '/');
+	const currentProject = $derived(page.params.project);
+
+	function load(): string[] {
+		try {
+			const saved = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]');
+			return Array.isArray(saved) ? saved.filter((s) => typeof s === 'string') : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function remember() {
+		try {
+			localStorage.setItem(OPEN_KEY, JSON.stringify(open));
+		} catch {
+			// The tree still works for this session.
+		}
+	}
+
+	function toggle(slug: string) {
+		open = open.includes(slug) ? open.filter((s) => s !== slug) : [...open, slug];
+		remember();
+	}
+
+	// The project being looked at is always unfolded, so its threads are one click away.
+	$effect(() => {
+		const slug = currentProject;
+		if (slug && !open.includes(slug)) {
+			open = [...open, slug];
+			remember();
+		}
+	});
 
 	// Reflect an open search in the box, so refining it is one edit away.
 	$effect(() => {
@@ -33,9 +68,10 @@
 		if (q) goto(`/search?q=${encodeURIComponent(q)}`);
 	}
 
-	// On a narrow window the drawer closes after every choice.
+	// On a narrow window the drawer closes after every choice (but not after folding a project).
 	function closeDrawer(e: MouseEvent) {
-		if ((e.target as HTMLElement).closest('a, button')) drawer.open = false;
+		const target = (e.target as HTMLElement).closest('a, button');
+		if (target && !target.classList.contains('folder-toggle')) drawer.open = false;
 	}
 </script>
 
@@ -47,23 +83,46 @@
 		<input type="search" placeholder="Search everything…" autocomplete="off" spellcheck="false" bind:value={query} />
 	</form>
 
-	<a class="nav-item" class:active={on('/planboard')} href="/planboard"><span class="nav-ico">▦</span>Planboard</a>
-	<a class="nav-item" class:active={on('/documents')} href="/documents"><span class="nav-ico">▤</span>Documents</a>
-	<a class="nav-item" class:active={on('/document-types')} href="/document-types"><span class="nav-ico">❖</span>Document types</a>
+	<a class="nav-item" class:active={path === '/'} href="/"><span class="nav-ico">⌂</span>Home</a>
+	<a class="nav-item" class:active={on('/templates')} href="/templates"><span class="nav-ico">❖</span>Templates</a>
 
 	<div class="section-head">
-		<span>Threads</span>
-		<button class="icon-btn" title="New thread" aria-label="New thread" onclick={newThreadFlow}>+</button>
+		<span>Projects</span>
+		<button class="icon-btn" title="New project" aria-label="New project" onclick={newProjectFlow}>+</button>
 	</div>
 	<nav class="space-list">
-		{#each threads as t (t.slug)}
-			<a class="space-item" class:active={on(`/threads/${t.slug}`)} href="/threads/{t.slug}">
-				<span class="dot"></span>
-				<span class="name">{t.title}</span>
-				<span class="count">{t.postCount || ''}</span>
-			</a>
+		{#each projects as p (p.slug)}
+			{@const unfolded = open.includes(p.slug)}
+			<div class="folder-row" class:active={on(projectUrl(p.slug)) && !page.params.thread}>
+				<button
+					class="folder-toggle"
+					aria-label={unfolded ? `Fold ${p.name}` : `Unfold ${p.name}`}
+					aria-expanded={unfolded}
+					onclick={() => toggle(p.slug)}
+				>
+					{unfolded ? '▾' : '▸'}
+				</button>
+				<a class="folder-link" href={projectUrl(p.slug)}>
+					<span class="name">{p.name}</span>
+					<span class="count">{p.threads.length || ''}</span>
+				</a>
+			</div>
+			{#if unfolded}
+				<div class="folder-children">
+					{#each p.threads as t (t.slug)}
+						<a class="tree-item" class:active={path === threadUrl(p.slug, t.slug)} href={threadUrl(p.slug, t.slug)}>
+							<span class="dot"></span>
+							<span class="name">{t.title}</span>
+							<span class="count">{t.postCount || ''}</span>
+						</a>
+					{:else}
+						<div class="space-empty">No threads yet</div>
+					{/each}
+					<button class="tree-item add" onclick={() => newThreadFlow(p.slug)}>＋ New thread</button>
+				</div>
+			{/if}
 		{:else}
-			<div class="space-empty">No threads yet</div>
+			<div class="space-empty">No projects yet</div>
 		{/each}
 	</nav>
 

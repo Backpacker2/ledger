@@ -1,14 +1,9 @@
-//! The parts of the screenshot feature that don't need a screen: which shortcuts are accepted, how a dragged
-//! region is cropped, and what is sent to (and understood from) the upload endpoint.
-
-use std::io::{Read, Write};
-use std::net::TcpListener;
-use std::sync::mpsc;
-use std::thread;
+//! The parts of the screenshot feature that don't need a screen: which shortcuts are accepted, and how a dragged
+//! region is cropped.
 
 use image::{Rgba, RgbaImage};
 
-use crate::screenshot::{DEFAULT_HOTKEY, Region, crop, parse_hotkey, post_image};
+use crate::screenshot::{DEFAULT_HOTKEY, Region, crop, file_name, parse_hotkey};
 
 #[test]
 fn the_default_and_ordinary_shortcuts_are_accepted() {
@@ -58,73 +53,9 @@ fn a_region_is_cropped_out_of_the_capture_and_clamped_to_it() {
     }
 }
 
-/// A one-shot HTTP server: answers the first request with `reply` and hands the request back.
-fn serve(status: &str, content_type: &str, reply: &str) -> (String, mpsc::Receiver<Vec<u8>>) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let url = format!("http://{}/upload", listener.local_addr().unwrap());
-    let (tx, rx) = mpsc::channel();
-    let response = format!("HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}", reply.len());
-
-    thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let mut request = Vec::new();
-        let mut buf = [0u8; 8192];
-        loop {
-            let n = stream.read(&mut buf).unwrap();
-            request.extend_from_slice(&buf[..n]);
-            let text = String::from_utf8_lossy(&request).to_string();
-            if let Some(end) = text.find("\r\n\r\n") {
-                let length = text.lines().find_map(|l| l.to_lowercase().strip_prefix("content-length: ").and_then(|v| v.trim().parse::<usize>().ok())).unwrap_or(0);
-                if request.len() >= end + 4 + length {
-                    break;
-                }
-            }
-            if n == 0 {
-                break;
-            }
-        }
-        stream.write_all(response.as_bytes()).unwrap();
-        tx.send(request).unwrap();
-    });
-    (url, rx)
-}
-
 #[test]
-fn the_image_is_posted_as_a_png_in_a_multipart_file_field() {
-    let (url, request) = serve("200 OK", "application/json", r#"{"url":"https://img.example/abc.png"}"#);
-    let uploaded = post_image(&url, &picture()).unwrap();
-    assert_eq!((uploaded.url.as_str(), uploaded.width, uploaded.height), ("https://img.example/abc.png", 8, 6));
-
-    let request = request.recv().unwrap();
-    let text = String::from_utf8_lossy(&request);
-    assert!(text.starts_with("POST /upload "), "{text}");
-    assert!(text.to_lowercase().contains("content-type: multipart/form-data; boundary="));
-    assert!(text.contains(r#"name="file"; filename="screenshot-"#), "{text}");
-    assert!(text.contains("Content-Type: image/png"));
-    assert!(request.windows(4).any(|w| w == [0x89, b'P', b'N', b'G']), "the body holds a real PNG");
-}
-
-#[test]
-fn the_endpoints_answer_is_understood_in_its_common_shapes() {
-    for (content_type, reply) in [
-        ("application/json", r#"{"link":"https://x.example/1.png"}"#),
-        ("application/json", r#"{"data":{"url":"https://x.example/1.png"}}"#),
-        ("text/plain", "https://x.example/1.png\n"),
-    ] {
-        let (url, _) = serve("200 OK", content_type, reply);
-        assert_eq!(post_image(&url, &picture()).unwrap().url, "https://x.example/1.png", "{reply}");
-    }
-}
-
-#[test]
-fn upload_failures_say_what_went_wrong() {
-    let (url, _) = serve("500 Internal Server Error", "text/plain", "boom");
-    assert!(post_image(&url, &picture()).unwrap_err().to_string().contains("500"));
-
-    let (url, _) = serve("200 OK", "application/json", r#"{"ok":true}"#);
-    assert!(post_image(&url, &picture()).unwrap_err().to_string().contains("didn't contain the image's link"));
-
-    // Nothing listening there at all.
-    let message = post_image("http://127.0.0.1:1/upload", &picture()).unwrap_err().to_string();
-    assert!(message.contains("Could not reach the upload endpoint"), "{message}");
+fn screenshots_are_saved_under_a_dated_png_name() {
+    let name = file_name();
+    assert!(name.starts_with("screenshot-") && name.ends_with(".png"), "{name}");
+    assert_eq!(name.len(), "screenshot-20260101-120000.png".len());
 }

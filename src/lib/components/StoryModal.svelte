@@ -1,17 +1,17 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';
-	import type { Column, Criterion, Story, ThreadSummary } from '$lib/types';
+	import type { Criterion, Story, ThreadSummary } from '$lib/types';
 	import Modal from './Modal.svelte';
 
 	/** `story` is null when creating one. The modal is mounted fresh each time, so it only reads the initial values. */
 	let {
+		project,
 		story,
 		threads,
 		initialThreadSlugs = [],
 		onclose
-	}: { story: Story | null; threads: ThreadSummary[]; initialThreadSlugs?: string[]; onclose: () => void } = $props();
+	}: { project: string; story: Story | null; threads: ThreadSummary[]; initialThreadSlugs?: string[]; onclose: () => void } = $props();
 
 	/** The form's starting values, read once; edits stay local until Save. */
 	function start() {
@@ -21,8 +21,8 @@
 			role: story?.role ?? '',
 			want: story?.want ?? '',
 			reason: story?.reason ?? '',
+			notes: story?.notes ?? '',
 			criteria: story ? story.criteria.map((c) => ({ ...c })) : [],
-			columnId: story?.columnId ?? '',
 			threadSlugs: story ? story.threads.map((t) => t.slug) : [...initialThreadSlugs]
 		};
 	}
@@ -33,21 +33,15 @@
 	let role = $state(initial.role);
 	let want = $state(initial.want);
 	let reason = $state(initial.reason);
+	let notes = $state(initial.notes);
 	let criteria = $state<Criterion[]>(initial.criteria);
-	let columnId = $state(initial.columnId);
 	let threadSlugs = $state<string[]>(initial.threadSlugs);
 	let newCriterion = $state('');
-	let columns = $state<Column[]>([]);
 	let saving = $state(false);
 
 	const titleOf = (slug: string) => threads.find((t) => t.slug === slug)?.title ?? slug;
 	const unlinked = $derived(threads.filter((t) => !threadSlugs.includes(t.slug)));
 	const doneCount = $derived(criteria.filter((c) => c.done).length);
-
-	onMount(async () => {
-		if (!story) return;
-		columns = (await attempt(() => api.getPlanboard()))?.columns ?? [];
-	});
 
 	function addCriterion() {
 		const text = newCriterion.trim();
@@ -61,12 +55,12 @@
 		saving = true;
 		const saved = await attempt(async () => {
 			if (!story) {
-				return api.createUserStory({ id, summary, role, want, reason, criteria, threadSlugs });
+				return api.createStory(project, { id, summary, role, want, reason, notes, criteria, threadSlugs });
 			}
-			await api.updateUserStory(story.id, { summary, role, want, reason, criteria, columnId });
+			await api.updateStory(project, story.id, { summary, role, want, reason, notes, criteria });
 			const before = story.threads.map((t) => t.slug);
-			for (const slug of threadSlugs.filter((s) => !before.includes(s))) await api.linkStoryThread(story.id, slug);
-			for (const slug of before.filter((s) => !threadSlugs.includes(s))) await api.unlinkStoryThread(story.id, slug);
+			for (const slug of threadSlugs.filter((s) => !before.includes(s))) await api.linkStoryThread(project, story.id, slug);
+			for (const slug of before.filter((s) => !threadSlugs.includes(s))) await api.unlinkStoryThread(project, story.id, slug);
 			return story;
 		});
 		saving = false;
@@ -80,12 +74,12 @@
 		if (!story) return;
 		const ok = await confirmDialog({
 			title: `Delete ${story.id}?`,
-			message: 'Its threads and documents are left alone.',
+			message: 'Its threads are left alone, and its tasks stay on the board without the link.',
 			confirmLabel: 'Delete',
 			danger: true
 		});
 		if (!ok) return;
-		if ((await attempt(() => api.deleteUserStory(story.id))) !== undefined) {
+		if ((await attempt(() => api.deleteStory(project, story.id))) !== undefined) {
 			await refresh();
 			onclose();
 		}
@@ -115,6 +109,11 @@
 		<label class="field grow">I want to…<input bind:value={want} placeholder="goal" /></label>
 		<label class="field grow">Such that…<input bind:value={reason} placeholder="reason" /></label>
 	</div>
+
+	<label class="field">
+		Notes
+		<textarea bind:value={notes} rows="3" placeholder="Context, open questions, links. Markdown works."></textarea>
+	</label>
 
 	<div class="field">
 		<span>Acceptance criteria{criteria.length ? ` · ${doneCount}/${criteria.length} met` : ''}</span>
@@ -167,15 +166,6 @@
 			{/if}
 		</div>
 	</div>
-
-	{#if story && columns.length}
-		<label class="field" style="width:220px">
-			Column
-			<select bind:value={columnId}>
-				{#each columns as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
-			</select>
-		</label>
-	{/if}
 
 	{#snippet footer()}
 		{#if story}<button class="btn danger ghost" onclick={remove}>Delete</button>{/if}

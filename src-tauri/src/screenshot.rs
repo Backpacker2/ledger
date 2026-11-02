@@ -1,6 +1,7 @@
 //! Screenshots. A global hotkey captures the monitor under the cursor, a frameless always-on-top window shows the
-//! capture so a region can be dragged out, and the cropped PNG is uploaded from here to a configurable endpoint.
-//! The main window then comes to the front and opens the result.
+//! capture so a region can be dragged out, and the cropped PNG is kept here, in memory, while the main window comes
+//! to the front and asks which thread it belongs to. Attaching it saves the file in that project's attachments and
+//! records it in the thread like any other upload (see `uploads`).
 //!
 //! The overlay (`/screenshot-overlay` in the frontend) works in the capture's own pixels: it asks for the image,
 //! scales the drag from window units to image pixels, and sends the region back. Nothing about the image
@@ -13,12 +14,10 @@ use std::io::Cursor;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
 
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder, ImageFormat, RgbaImage};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, Monitor, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut, ShortcutState};
 
@@ -45,10 +44,9 @@ pub struct Region {
     pub height: u32,
 }
 
-/// The payload of the `screenshot-ready` event.
+/// The payload of the `screenshot-ready` event: a screenshot is waiting to be attached to a thread.
 #[derive(Debug, Serialize)]
-pub struct Uploaded {
-    pub url: String,
+pub struct Taken {
     pub width: u32,
     pub height: u32,
 }
@@ -58,9 +56,6 @@ pub struct Uploaded {
 pub struct ScreenshotSettings {
     pub hotkey: String,
     pub default_hotkey: String,
-    pub upload_url: String,
-    /// The URL is fixed by the `LEDGER_SCREENSHOT_URL` environment variable.
-    pub upload_url_locked: bool,
     /// Why the saved hotkey isn't working, if it isn't.
     pub problem: Option<String>,
     /// Something about this platform worth knowing before the first screenshot.
@@ -68,7 +63,6 @@ pub struct ScreenshotSettings {
 }
 
 pub struct Screenshots {
-    config_dir: std::path::PathBuf,
     /// The hotkey currently registered with the system.
     registered: Mutex<Option<Shortcut>>,
     problem: Mutex<Option<String>>,
@@ -76,34 +70,44 @@ pub struct Screenshots {
     busy: AtomicBool,
     /// The capture the overlay is showing.
     capture: Mutex<Option<RgbaImage>>,
+    /// The cropped screenshot (as PNG) waiting to be attached to a thread.
+    pending: Mutex<Option<Vec<u8>>>,
     #[cfg(target_os = "linux")]
     portal_task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
 }
 
 impl Screenshots {
-    pub fn new(config_dir: std::path::PathBuf) -> Screenshots {
+    pub fn new() -> Screenshots {
         Screenshots {
-            config_dir,
             registered: Mutex::new(None),
             problem: Mutex::new(None),
             busy: AtomicBool::new(false),
             capture: Mutex::new(None),
+            pending: Mutex::new(None),
             #[cfg(target_os = "linux")]
             portal_task: Mutex::new(None),
         }
     }
 
-    pub fn settings(&self) -> ScreenshotSettings {
-        let config = settings::load_config(&self.config_dir);
+    /// The hotkey saved in the vault's settings (or the default) and whether it is working.
+    pub fn settings(&self, root: &std::path::Path) -> ScreenshotSettings {
         ScreenshotSettings {
-            hotkey: config.screenshot_hotkey.unwrap_or_else(|| DEFAULT_HOTKEY.to_string()),
+            hotkey: saved_hotkey(root),
             default_hotkey: DEFAULT_HOTKEY.to_string(),
-            upload_url: upload_url_override().or(config.screenshot_upload_url).unwrap_or_default(),
-            upload_url_locked: upload_url_override().is_some(),
             problem: lock(&self.problem).clone(),
             note: platform_note(),
         }
     }
+}
+
+impl Default for Screenshots {
+    fn default() -> Self {
+        Screenshots::new()
+    }
+}
+
+fn saved_hotkey(root: &std::path::Path) -> String {
+    settings::read_settings(root).screenshot_hotkey.unwrap_or_else(|| DEFAULT_HOTKEY.to_string())
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -162,12 +166,13 @@ fn register(app: &AppHandle, shortcut: Shortcut, label: &str) -> Result<()> {
         .map_err(|e| Error::invalid(format!("{label} couldn't be registered, probably because another program already uses it. Choose a different shortcut. ({e})")))
 }
 
-/// At startup: registers the saved hotkey (or the default), remembering why if that fails.
+/// At startup, and whenever the vault changes: registers the vault's saved hotkey (or the default), remembering
+/// why if that fails.
 pub fn register_saved(app: &AppHandle) {
-    let shots = &state(app).screenshots;
-    let hotkey = settings::load_config(&shots.config_dir).screenshot_hotkey.unwrap_or_else(|| DEFAULT_HOTKEY.to_string());
+    let app_state = state(app);
+    let hotkey = saved_hotkey(app_state.lock().vault.root());
     if let Err(e) = apply_hotkey(app, &hotkey) {
-        *lock(&shots.problem) = Some(e.to_string());
+        *lock(&app_state.screenshots.problem) = Some(e.to_string());
     }
 }
 
@@ -202,8 +207,6 @@ pub fn trigger(app: &AppHandle) {
 }
 
 fn begin(app: &AppHandle) -> Result<()> {
-    endpoint(app)?; // find out now if there is nowhere to upload to, before anything covers the screen
-
     #[cfg(target_os = "linux")]
     if portal::is_wayland() {
         let image = portal::capture()?;
@@ -324,7 +327,7 @@ pub fn cancel(app: &AppHandle) {
     close_overlay(app);
 }
 
-/// The region was chosen: close the overlay, then crop and upload in the background.
+/// The region was chosen: close the overlay, then crop it in the background and hand it over for attaching.
 pub fn finish(app: &AppHandle, region: Region) -> Result<()> {
     let image = lock(&state(app).screenshots.capture)
         .take()
@@ -340,20 +343,39 @@ fn close_overlay(app: &AppHandle) {
     }
 }
 
-// ---- cropping and uploading -------------------------------------------------------------------------
+// ---- cropping and handing over -------------------------------------------------------------------------
 
-/// Crops, uploads and reports, off the calling thread.
+/// Crops the capture and keeps it for attaching, off the calling thread.
 fn deliver(app: AppHandle, image: RgbaImage, region: Option<Region>) {
     std::thread::spawn(move || {
-        let result = crop(image, region).and_then(|image| post_image(&endpoint(&app)?, &image));
+        let result = crop(image, region).and_then(|image| {
+            let mut png = Vec::new();
+            image.write_to(&mut Cursor::new(&mut png), ImageFormat::Png).map_err(Error::screenshot)?;
+            Ok((Taken { width: image.width(), height: image.height() }, png))
+        });
         match result {
-            Ok(uploaded) => {
-                let _ = app.emit("screenshot-ready", &uploaded);
+            Ok((taken, png)) => {
+                *lock(&state(&app).screenshots.pending) = Some(png);
+                let _ = app.emit("screenshot-ready", &taken);
                 reveal_main(&app);
             }
             Err(e) => report(&app, &e),
         }
     });
+}
+
+/// The screenshot waiting to be attached, as PNG bytes (for the preview).
+pub fn pending_image(app: &AppHandle) -> Result<Vec<u8>> {
+    lock(&state(app).screenshots.pending).clone().ok_or_else(|| Error::screenshot("There is no screenshot waiting."))
+}
+
+pub fn discard_pending(app: &AppHandle) {
+    *lock(&state(app).screenshots.pending) = None;
+}
+
+/// The file name a screenshot is saved under.
+pub fn file_name() -> String {
+    format!("screenshot-{}.png", chrono::Utc::now().format("%Y%m%d-%H%M%S"))
 }
 
 /// The region, clamped to the image: whatever the overlay computed, the crop stays inside the capture.
@@ -365,52 +387,6 @@ pub(crate) fn crop(image: RgbaImage, region: Option<Region>) -> Result<RgbaImage
     }
     let (w, h) = (r.width.min(width - r.x), r.height.min(height - r.y));
     Ok(image::imageops::crop_imm(&image, r.x, r.y, w, h).to_image())
-}
-
-fn upload_url_override() -> Option<String> {
-    std::env::var("LEDGER_SCREENSHOT_URL").ok().map(|u| u.trim().to_string()).filter(|u| !u.is_empty())
-}
-
-/// Where screenshots go: `LEDGER_SCREENSHOT_URL`, else the URL saved in Settings.
-fn endpoint(app: &AppHandle) -> Result<String> {
-    upload_url_override()
-        .or_else(|| settings::load_config(&state(app).screenshots.config_dir).screenshot_upload_url)
-        .map(|u| u.trim().to_string())
-        .filter(|u| !u.is_empty())
-        .ok_or_else(|| Error::screenshot("Set an upload URL under Settings → Screenshots first."))
-}
-
-/// POSTs the image as a multipart form (field `file`, a PNG). The answer should be JSON with the image's link in
-/// `url` (or `link`, or `data.url`), or just the link as plain text.
-pub(crate) fn post_image(endpoint: &str, image: &RgbaImage) -> Result<Uploaded> {
-    let mut png = Vec::new();
-    image.write_to(&mut Cursor::new(&mut png), ImageFormat::Png).map_err(Error::screenshot)?;
-
-    let name = format!("screenshot-{}.png", chrono::Utc::now().format("%Y%m%d-%H%M%S"));
-    let file = reqwest::blocking::multipart::Part::bytes(png).file_name(name).mime_str("image/png").map_err(Error::screenshot)?;
-    let response = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(60))
-        .user_agent(concat!("ledger/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(Error::screenshot)?
-        .post(endpoint)
-        .multipart(reqwest::blocking::multipart::Form::new().part("file", file))
-        .send()
-        .map_err(|e| Error::screenshot(format!("Could not reach the upload endpoint: {e}")))?;
-
-    let status = response.status();
-    let body = response.text().unwrap_or_default();
-    if !status.is_success() {
-        return Err(Error::screenshot(format!("The upload endpoint answered {status}.")));
-    }
-
-    let json: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
-    let url = [&json["url"], &json["link"], &json["data"]["url"]]
-        .into_iter()
-        .find_map(|v| v.as_str())
-        .or_else(|| Some(body.trim()).filter(|b| b.starts_with("http")))
-        .ok_or_else(|| Error::screenshot("The upload worked, but the answer didn't contain the image's link."))?;
-    Ok(Uploaded { url: url.to_string(), width: image.width(), height: image.height() })
 }
 
 fn reveal_main(app: &AppHandle) {

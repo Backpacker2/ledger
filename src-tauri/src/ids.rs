@@ -11,6 +11,11 @@ static LAST_MILLIS: AtomicI64 = AtomicI64::new(0);
 
 /// Lower-case ASCII slug; anything else collapses to "-". Falls back to "thread".
 pub fn slugify(input: &str) -> String {
+    slugify_as(input, "thread")
+}
+
+/// Like [`slugify`], with a different fallback for names that have no letters or digits in them.
+pub fn slugify_as(input: &str, fallback: &str) -> String {
     let mut slug = String::new();
     let mut pending_dash = false;
     for c in input.trim().to_lowercase().chars() {
@@ -24,7 +29,7 @@ pub fn slugify(input: &str) -> String {
             pending_dash = true;
         }
     }
-    if slug.is_empty() { "thread".to_string() } else { slug }
+    if slug.is_empty() { fallback.to_string() } else { slug }
 }
 
 /// An id together with the moment it stands for. Both come from one strictly increasing millisecond clock, so
