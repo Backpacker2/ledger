@@ -5,6 +5,7 @@
 	import { time } from '$lib/format';
 	import { attempt, confirmDialog, promptDialog, refresh } from '$lib/ui.svelte';
 	import type { DeliverableSummary, Prompt } from '$lib/types';
+	import ClaudeRunPanel from './ClaudeRunPanel.svelte';
 	import Markdown from './Markdown.svelte';
 	import Modal from './Modal.svelte';
 
@@ -98,6 +99,7 @@
 		<button class="link" onclick={() => onedit(prompt)}>Edit</button>
 		<button class="link danger" onclick={remove}>Delete</button>
 	</div>
+	<ClaudeRunPanel {project} {thread} {prompt} />
 </div>
 
 {#if linking}

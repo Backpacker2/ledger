@@ -4,7 +4,7 @@
 //!
 //! Paths in this module are relative to the deliverables folder and use `/`.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -146,15 +146,20 @@ pub fn list(conn: &Connection, project: &str) -> Result<Vec<DeliverableSummary>>
         }
     }
 
-    let prompt_counts: HashMap<String, i64> = query_all(
+    // A prompt counts once for a deliverable, whether it is linked to the file or to some of its published versions.
+    let mut prompt_counts: HashMap<String, i64> = HashMap::new();
+    let mut counted: HashSet<(String, String)> = HashSet::new();
+    for (prompt, path) in query_all::<(String, String), _>(
         conn,
-        "SELECT d.path, COUNT(*) FROM prompt_deliverables d JOIN prompts p ON p.id = d.prompt_id
-         WHERE p.project_slug = ?1 GROUP BY d.path",
+        "SELECT d.prompt_id, d.path FROM prompt_deliverables d JOIN prompts p ON p.id = d.prompt_id WHERE p.project_slug = ?1",
         [project],
-        |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)),
-    )?
-    .into_iter()
-    .collect();
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )? {
+        let base = split_version(&path).0;
+        if counted.insert((prompt, base.clone())) {
+            *prompt_counts.entry(base).or_default() += 1;
+        }
+    }
     let mut open_feedback: HashMap<String, i64> = HashMap::new();
     for path in query_all::<String, _>(conn, "SELECT deliverable_path FROM feedback WHERE project_slug = ?1 AND status = 'open'", [project], |r| r.get(0))? {
         *open_feedback.entry(split_version(&path).0).or_default() += 1;
@@ -270,7 +275,23 @@ pub fn publish(conn: &Connection, root: &Path, project: &str, path: &str, bump: 
     if version.is_some() {
         return Err(Error::invalid("Publish the current version, not a published one"));
     }
-    let live = get(conn, project, &base)?;
+    let thread = prompts::producing(conn, project, &base)?.first().map(|p| p.thread_slug.clone());
+    freeze(conn, root, project, &base, bump, explicit, None, thread.as_deref())?;
+    get(conn, project, &base)
+}
+
+/// What a run of a prompt publishes: the next minor version, noted in the prompt's thread. With `held` it is that
+/// content (what the file said before the run changed it) rather than the file as it is now. Returns the version,
+/// like "0.2"; the snapshot is `snapshot_path(base, version)`.
+pub fn publish_run(conn: &Connection, root: &Path, project: &str, base: &str, held: Option<&[u8]>, thread: &str) -> Result<String> {
+    freeze(conn, root, project, base, Bump::Minor, None, held, Some(thread))
+}
+
+/// Writes the snapshot of the live file at `base` (or of `held`, when given) as the next version, and when `thread` is
+/// given notes it there. Returns the version.
+#[allow(clippy::too_many_arguments)]
+fn freeze(conn: &Connection, root: &Path, project: &str, base: &str, bump: Bump, explicit: Option<&str>, held: Option<&[u8]>, thread: Option<&str>) -> Result<String> {
+    let live = get(conn, project, base)?;
 
     let existing = live.versions.clone();
     let version = match explicit.map(str::trim).filter(|v| !v.is_empty()) {
@@ -285,33 +306,42 @@ pub fn publish(conn: &Connection, root: &Path, project: &str, path: &str, bump: 
         return Err(Error::invalid(format!("Version {version} is already published")));
     }
 
-    let snapshot = snapshot_path(&base, &version);
+    let snapshot = snapshot_path(base, &version);
     let tx = conn.unchecked_transaction()?;
     match &live.body {
-        Some(text) => upsert(&tx, project, &snapshot, text.len() as i64, &ids::now(), Some(text))?,
+        Some(body) => {
+            let held_text = held.map(|bytes| String::from_utf8_lossy(bytes).into_owned());
+            let text = held_text.as_deref().unwrap_or(body);
+            upsert(&tx, project, &snapshot, text.len() as i64, &ids::now(), Some(text))?;
+        }
         None => {
-            let from = deliverables_dir(root, project).join(&base);
             let to = deliverables_dir(root, project).join(&snapshot);
-            fs::copy(&from, &to).map_err(|e| Error::io(&to, e))?;
-            upsert(&tx, project, &snapshot, live.size, &ids::now(), None)?;
+            match held {
+                Some(bytes) => fs::write(&to, bytes).map_err(|e| Error::io(&to, e))?,
+                None => {
+                    let from = deliverables_dir(root, project).join(base);
+                    fs::copy(&from, &to).map_err(|e| Error::io(&to, e))?;
+                }
+            }
+            upsert(&tx, project, &snapshot, held.map_or(live.size, |bytes| bytes.len() as i64), &ids::now(), None)?;
         }
     }
-    if let Some(prompt) = prompts::producing(&tx, project, &base)?.first() {
+    if let Some(thread) = thread {
         posts::add(
             &tx,
             project,
-            &prompt.thread_slug,
+            thread,
             &format!("Version {version} of **{}** was just published.", live.name),
             AddOptions {
                 version_published: true,
-                deliverable_path: Some(base.clone()),
+                deliverable_path: Some(base.to_string()),
                 deliverable_version: Some(version.clone()),
                 ..Default::default()
             },
         )?;
     }
     tx.commit()?;
-    get(conn, project, &base)
+    Ok(version)
 }
 
 /// Deletes the current file; its published versions stay. A markdown file leaves with the next write-through; any

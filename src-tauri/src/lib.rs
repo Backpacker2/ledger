@@ -1,4 +1,5 @@
 mod board;
+mod claude_code;
 mod commands;
 mod crypto;
 mod db;
@@ -29,6 +30,8 @@ mod vault;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_claude_code;
 #[cfg(test)]
 mod tests_crypto;
 #[cfg(test)]
@@ -79,6 +82,7 @@ pub fn run() {
             screenshot::register_saved(app.handle());
             Ok(())
         })
+        .on_window_event(claude_code::on_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::render_markdown,
             commands::search,
@@ -162,6 +166,14 @@ pub fn run() {
             commands::pending_screenshot_image,
             commands::attach_screenshot,
             commands::discard_screenshot,
+            claude_code::claude_code_settings,
+            claude_code::save_claude_code_settings,
+            claude_code::check_claude_code,
+            claude_code::claude_code_preview,
+            claude_code::claude_code_start,
+            claude_code::claude_code_cancel,
+            claude_code::claude_code_runs,
+            claude_code::claude_code_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -100,6 +100,35 @@ CREATE TABLE feedback (
     FOREIGN KEY (project_slug, thread_slug) REFERENCES threads(project_slug, slug) ON DELETE CASCADE
 );
 
+-- What running a prompt with Claude Code did: how it ended, and what it said and did. Kept as runs/<id>.md in the
+-- thread, so the history reads without the app. `prompt_id` is deliberately not a foreign key: deleting a prompt
+-- leaves the record of what ran.
+CREATE TABLE claude_runs (
+    id              TEXT PRIMARY KEY,
+    project_slug    TEXT NOT NULL,
+    thread_slug     TEXT NOT NULL,
+    prompt_id       TEXT NOT NULL,
+    -- finished, failed or cancelled
+    status          TEXT NOT NULL,
+    model           TEXT NOT NULL DEFAULT '',
+    permission_mode TEXT NOT NULL DEFAULT '',
+    started_at      TEXT NOT NULL,
+    finished_at     TEXT NOT NULL,
+    seconds         INTEGER NOT NULL DEFAULT 0,
+    turns           INTEGER,
+    body            TEXT NOT NULL,
+    FOREIGN KEY (project_slug, thread_slug) REFERENCES threads(project_slug, slug) ON DELETE CASCADE
+);
+CREATE INDEX claude_runs_by_prompt ON claude_runs (prompt_id, started_at);
+
+-- The deliverables a run wrote or changed, by path relative to the project's deliverables/ folder.
+CREATE TABLE claude_run_files (
+    run_id   TEXT NOT NULL REFERENCES claude_runs(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    path     TEXT NOT NULL,
+    PRIMARY KEY (run_id, path)
+);
+
 -- The manifest of an uploaded file: when, where it is (relative to the project folder) and a description.
 CREATE TABLE uploads (
     id           TEXT PRIMARY KEY,

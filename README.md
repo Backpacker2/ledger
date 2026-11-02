@@ -28,6 +28,7 @@ projects/<project>/threads/<thread>/posts/<id>.md       its posts
 projects/<project>/threads/<thread>/prompts/<id>.md     its prompts: requests for deliverables
 projects/<project>/threads/<thread>/feedback/<id>.md    its feedback, which lands on a deliverable
 projects/<project>/threads/<thread>/uploads/<id>.md     upload manifests: when, where the file is, a description
+projects/<project>/threads/<thread>/runs/<id>.md        a run of a prompt with Claude Code: how it ended, what it did
 projects/<project>/userstories/<id>.md              a user story
 projects/<project>/tasks/<id>.md                    a task (a card on the board)
 projects/<project>/deliverables/                    what prompts produce — any kind of file;

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { openUrl } from '@tauri-apps/plugin-opener';
+	import ClaudeCodeSettings from '$lib/components/ClaudeCodeSettings.svelte';
 	import HotkeyInput from '$lib/components/HotkeyInput.svelte';
 	import OrderSettings from '$lib/components/OrderSettings.svelte';
 	import { api } from '$lib/api';
@@ -502,6 +503,8 @@ templates/&lt;id&gt;.md                               templates for every projec
 				<button class="btn" onclick={() => api.takeScreenshot()} disabled={shotChanged}>Take a screenshot now</button>
 			</div>
 		</div>
+
+		<ClaudeCodeSettings />
 
 		<div class="panel">
 			<h2>Theme</h2>

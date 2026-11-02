@@ -3,6 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::claude_code::records::RunRecordView;
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkedThread {
@@ -96,6 +98,8 @@ pub struct PromptView {
     pub created_at: String,
     pub updated_at: String,
     pub deliverables: Vec<PromptDeliverable>,
+    /// The times it was run with Claude Code, newest first.
+    pub runs: Vec<RunRecordView>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -75,6 +75,8 @@ export interface Prompt {
 	createdAt: string;
 	updatedAt: string;
 	deliverables: PromptDeliverable[];
+	/** The times it was run with Claude Code, newest first. */
+	runs: ClaudeRunRecord[];
 }
 
 export interface Feedback {
@@ -345,3 +347,98 @@ export interface TaskUpdate {
 }
 
 export type Bump = 'minor' | 'major';
+
+// ---- Run a prompt with Claude Code (a block of its own; see src-tauri/src/claude_code) ---------------
+
+/** What Claude Code may do on its own. There is deliberately no mode that skips the permission checks. */
+export type ClaudePermissionMode = 'acceptEdits' | 'plan' | 'dontAsk';
+
+export interface ClaudeCodeSettings {
+	/** Empty means "find claude on the PATH". */
+	cliPath: string;
+	permissionMode: ClaudePermissionMode;
+	/** Empty means the CLI's own default. */
+	model: string;
+	/** Extra guard rails: ignore the project's own Claude settings, and refuse reads and writes outside the project. */
+	confine: boolean;
+	/** The program that would be run, when it can be found. */
+	resolvedPath: string | null;
+	/** Why it can't be found. */
+	problem: string | null;
+	settingsFile: string;
+	maxConcurrent: number;
+}
+
+export interface ClaudeCodeCheck {
+	ok: boolean;
+	version: string;
+	path: string | null;
+	message: string;
+}
+
+export interface ClaudeRunPreview {
+	/** Where it runs. */
+	folder: string;
+	/** For reading only; it is never run through a shell. */
+	command: string;
+	/** The text sent on standard input, exactly. */
+	prompt: string;
+	/** The settings file given with --settings, when the guard rails are on. */
+	guard: string | null;
+	permissionMode: ClaudePermissionMode;
+	model: string;
+	/** Set when it can't be run. */
+	problem: string | null;
+}
+
+export type ClaudeRunStatus = 'running' | 'finished' | 'failed' | 'cancelled';
+
+export interface ClaudeRun {
+	id: string;
+	project: string;
+	thread: string;
+	promptId: string;
+	promptTitle: string;
+	status: ClaudeRunStatus;
+	startedAt: string;
+	finishedAt: string | null;
+	exitCode: number | null;
+	/** Why it failed or stopped. */
+	message: string | null;
+	/** Cancel was pressed and the process is being stopped. */
+	cancelling: boolean;
+	/** How many pieces of output there have been so far. */
+	chunks: number;
+	/** The versions the app published for what the run wrote and linked to the prompt, like "plan@v0.2.md". */
+	linked: string[];
+	vaultReloaded: boolean;
+}
+
+/** The note kept in the thread (`runs/<id>.md`) about a run of a prompt that is over. */
+export interface ClaudeRunRecord {
+	/** The id of the run, as it was while it ran. */
+	id: string;
+	promptId: string;
+	status: Exclude<ClaudeRunStatus, 'running'>;
+	model: string;
+	permissionMode: string;
+	startedAt: string;
+	finishedAt: string;
+	seconds: number;
+	turns: number | null;
+	/** Deliverables it wrote or changed, relative to the project's deliverables folder. */
+	files: string[];
+	/** How it ended and what it did, rendered. */
+	html: string;
+}
+
+export interface ClaudeRunSnapshot {
+	run: ClaudeRun;
+	output: string;
+}
+
+/** The payload of the `claude-run` event: the run as it now is, and the output just added, if any. */
+export interface ClaudeRunEvent {
+	run: ClaudeRun;
+	chunk: { seq: number; text: string } | null;
+}

@@ -2,8 +2,11 @@
 //! an assistant reading the vault) leaves the file in the project's deliverables folder; the prompt keeps the
 //! list of the deliverables that came out of it.
 
+use std::collections::HashSet;
+
 use rusqlite::{Connection, Row, params};
 
+use crate::claude_code::records;
 use crate::db::{query_all, query_opt};
 use crate::error::{Error, Result};
 use crate::models::{DeliverablePrompt, PromptDeliverable, PromptView};
@@ -25,6 +28,7 @@ fn from_row(r: &Row<'_>) -> rusqlite::Result<PromptView> {
         html: markdown::render(&body),
         body,
         deliverables: vec![],
+        runs: vec![],
     })
 }
 
@@ -36,6 +40,7 @@ fn complete(conn: &Connection, project: &str, mut prompt: PromptView) -> Result<
         let exists = deliverables::exists(conn, project, &path)?;
         prompt.deliverables.push(PromptDeliverable { path, exists });
     }
+    prompt.runs = records::for_prompt(conn, project, &prompt.thread_slug, &prompt.id)?;
     Ok(prompt)
 }
 
@@ -136,17 +141,20 @@ pub fn unlink_deliverable(conn: &Connection, project: &str, thread: &str, id: &s
     get(conn, project, thread, id)
 }
 
-/// The prompts that produced a deliverable (given by its live path), oldest first.
+/// The prompts that produced a deliverable (given by its live path), oldest first. A prompt counts when it is linked
+/// to the file or to one of its published versions: a run links the version it published.
 pub fn producing(conn: &Connection, project: &str, path: &str) -> Result<Vec<DeliverablePrompt>> {
-    query_all(
+    let linked = query_all(
         conn,
-        "SELECT p.thread_slug, t.title, p.id, p.title
+        "SELECT p.thread_slug, t.title, p.id, p.title, d.path
          FROM prompt_deliverables d
          JOIN prompts p ON p.id = d.prompt_id
          JOIN threads t ON t.project_slug = p.project_slug AND t.slug = p.thread_slug
-         WHERE p.project_slug = ?1 AND d.path = ?2
+         WHERE p.project_slug = ?1
          ORDER BY p.created_at, p.rowid",
-        [project, path],
-        |r| Ok(DeliverablePrompt { thread_slug: r.get(0)?, thread_title: r.get(1)?, id: r.get(2)?, title: r.get(3)? }),
-    )
+        [project],
+        |r| Ok((DeliverablePrompt { thread_slug: r.get(0)?, thread_title: r.get(1)?, id: r.get(2)?, title: r.get(3)? }, r.get::<_, String>(4)?)),
+    )?;
+    let mut seen = HashSet::new();
+    Ok(linked.into_iter().filter(|(prompt, linked)| deliverables::split_version(linked).0 == path && seen.insert(prompt.id.clone())).map(|(prompt, _)| prompt).collect())
 }

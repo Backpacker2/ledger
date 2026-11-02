@@ -10,6 +10,7 @@
 //!                                    /prompts/<id>.md     its prompts (requests for deliverables)
 //!                                    /feedback/<id>.md    its feedback (on a deliverable)
 //!                                    /uploads/<id>.md     a manifest: when, where the file is, a description
+//!                                    /runs/<id>.md        a run of a prompt with Claude Code: how it went, what it did
 //! projects/<project>/userstories/<id>.md         a user story
 //! projects/<project>/tasks/<id>.md               a task on the board
 //! projects/<project>/templates/<id>.md           the project's own templates
@@ -392,6 +393,36 @@ fn export_threads(conn: &Connection, files: &mut BTreeMap<String, String>) -> Re
         frontmatter::set(&mut meta, "size", size);
         files.insert(entity_file(&project, &thread, "uploads", &id), frontmatter::render(&meta, &description));
     }
+
+    let mut run_files: HashMap<String, Vec<String>> = HashMap::new();
+    for (run, path) in query_all(conn, "SELECT run_id, path FROM claude_run_files ORDER BY run_id, position", [], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })? {
+        run_files.entry(run).or_default().push(path);
+    }
+    type RunRow = (String, String, String, String, String, String, String, String, String, i64, Option<i64>, String);
+    for (id, project, thread, prompt, status, model, mode, started_at, finished_at, seconds, turns, body) in query_all::<RunRow, _>(
+        conn,
+        "SELECT id, project_slug, thread_slug, prompt_id, status, model, permission_mode, started_at, finished_at, seconds, turns, body
+         FROM claude_runs",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?)),
+    )? {
+        let mut meta = Mapping::new();
+        frontmatter::set(&mut meta, "id", id.clone());
+        frontmatter::set(&mut meta, "prompt", prompt);
+        frontmatter::set(&mut meta, "status", status);
+        frontmatter::set_opt(&mut meta, "model", Some(&model));
+        frontmatter::set_opt(&mut meta, "permissionMode", Some(&mode));
+        frontmatter::set(&mut meta, "startedAt", started_at);
+        frontmatter::set(&mut meta, "finishedAt", finished_at);
+        frontmatter::set(&mut meta, "seconds", seconds);
+        if let Some(turns) = turns {
+            frontmatter::set(&mut meta, "turns", turns);
+        }
+        frontmatter::set_list(&mut meta, "deliverables", &run_files.remove(&id).unwrap_or_default());
+        files.insert(entity_file(&project, &thread, "runs", &id), frontmatter::render(&meta, &body));
+    }
     Ok(())
 }
 
@@ -667,6 +698,9 @@ fn import_threads(conn: &Connection, source: &Source, project: &str) -> Result<H
     let mut prompts: Vec<PromptItem> = vec![];
     let mut feedback: Vec<FeedbackItem> = vec![];
     let mut uploads: Vec<(String, String, String, String, i64, String, String)> = vec![];
+    // id, thread, prompt, status, model, permission mode, started, finished, seconds, turns, deliverables, body
+    type RunItem = (String, String, String, String, String, String, String, String, i64, Option<i64>, Vec<String>, String);
+    let mut runs: Vec<RunItem> = vec![];
     for slug in &slugs {
         for stem in source.stems(&format!("{}/prompts", thread_dir(project, slug))) {
             let rel = entity_file(project, slug, "prompts", &stem);
@@ -721,6 +755,32 @@ fn import_threads(conn: &Connection, source: &Source, project: &str) -> Result<H
                 description,
             ));
         }
+        for stem in source.stems(&format!("{}/runs", thread_dir(project, slug))) {
+            let rel = entity_file(project, slug, "runs", &stem);
+            let Some((meta, body)) = source.parsed(&rel) else { continue };
+            let Some(prompt) = meta.text("prompt") else { continue };
+            // A status this version doesn't know is shown as a failure rather than as a success nobody checked.
+            let status = match meta.text("status").as_deref() {
+                Some("finished") => "finished",
+                Some("cancelled") => "cancelled",
+                _ => "failed",
+            };
+            let started_at = meta.text("startedAt").unwrap_or_else(|| source.stamp(&rel));
+            runs.push((
+                meta.text("id").unwrap_or(stem),
+                slug.clone(),
+                prompt,
+                status.to_string(),
+                meta.text("model").unwrap_or_default(),
+                meta.text("permissionMode").unwrap_or_default(),
+                started_at.clone(),
+                meta.text("finishedAt").unwrap_or(started_at),
+                meta.text("seconds").and_then(|s| s.parse().ok()).unwrap_or(0),
+                meta.text("turns").and_then(|s| s.parse().ok()),
+                meta.list("deliverables"),
+                body,
+            ));
+        }
     }
 
     prompts.sort_by(|a, b| (&a.5, &a.0).cmp(&(&b.5, &b.0)));
@@ -749,6 +809,17 @@ fn import_threads(conn: &Connection, source: &Source, project: &str) -> Result<H
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![id, project, thread, file, name, size, uploaded_at, description],
         )?;
+    }
+    runs.sort_by(|a, b| (&a.6, &a.0).cmp(&(&b.6, &b.0)));
+    for (id, thread, prompt, status, model, mode, started_at, finished_at, seconds, turns, deliverables, body) in runs {
+        conn.execute(
+            "INSERT OR IGNORE INTO claude_runs (id, project_slug, thread_slug, prompt_id, status, model, permission_mode, started_at, finished_at, seconds, turns, body)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![id, project, thread, prompt, status, model, mode, started_at, finished_at, seconds, turns, body],
+        )?;
+        for (position, path) in deliverables.iter().enumerate() {
+            conn.execute("INSERT OR IGNORE INTO claude_run_files (run_id, position, path) VALUES (?1, ?2, ?3)", params![id, position as i64, path])?;
+        }
     }
     Ok(known)
 }
