@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
-	import { baseName, deliverableUrl } from '$lib/actions';
+	import { baseName, deliverableUrl, feedbackPromptDraft, threadUrl } from '$lib/actions';
 	import { time } from '$lib/format';
 	import { attempt, confirmDialog, refresh } from '$lib/ui.svelte';
 	import type { Feedback } from '$lib/types';
 	import Markdown from './Markdown.svelte';
+	import PromptModal from './PromptModal.svelte';
 
 	/** `onDeliverable`: shown on the deliverable's own page, where naming the deliverable would only be noise. */
 	let {
@@ -17,6 +19,7 @@
 	let editing = $state(false);
 	let draft = $state('');
 	let saving = $state(false);
+	let prompting = $state(false);
 
 	const resolved = $derived(feedback.status === 'resolved');
 
@@ -80,8 +83,22 @@
 		<Markdown html={feedback.html} />
 		<div class="actions">
 			<button class="link accent" onclick={toggle}>{resolved ? 'Reopen' : 'Mark resolved'}</button>
+			<button class="link accent" onclick={() => (prompting = true)}>Create prompt…</button>
 			<button class="link" onclick={startEdit}>Edit</button>
 			<button class="link danger" onclick={remove}>Delete</button>
 		</div>
 	{/if}
 </div>
+
+{#if prompting}
+	<!-- The prompt lands in this feedback's own thread. From a deliverable's page that is another screen, so go and show it;
+	     in the thread itself the new prompt scrolls into view on its own. -->
+	<PromptModal
+		{project}
+		{thread}
+		prompt={null}
+		draft={feedbackPromptDraft(feedback)}
+		onsaved={onDeliverable ? (saved) => goto(`${threadUrl(project, thread)}?item=pr-${saved.id}`) : undefined}
+		onclose={() => (prompting = false)}
+	/>
+{/if}

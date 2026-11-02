@@ -2,14 +2,24 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
 	import { attempt, refresh, toast } from '$lib/ui.svelte';
-	import type { DeliverableSummary, Prompt, Template } from '$lib/types';
+	import type { DeliverableSummary, Prompt, PromptDraft, Template } from '$lib/types';
 	import Modal from './Modal.svelte';
 
-	/** `prompt` is null when writing a new one. The modal is mounted fresh each time, so it only reads the initial values. */
-	let { project, thread, prompt, onclose }: { project: string; thread: string; prompt: Prompt | null; onclose: () => void } = $props();
+	/**
+	 * `prompt` is null when writing a new one, which may start from a `draft`; `onsaved` hears about the new prompt.
+	 * The modal is mounted fresh each time, so it only reads the initial values.
+	 */
+	let {
+		project,
+		thread,
+		prompt,
+		draft = null,
+		onsaved,
+		onclose
+	}: { project: string; thread: string; prompt: Prompt | null; draft?: PromptDraft | null; onsaved?: (saved: Prompt) => void; onclose: () => void } = $props();
 
 	function start() {
-		return { title: prompt?.title ?? '', body: prompt?.body ?? '' };
+		return { title: prompt?.title ?? draft?.title ?? '', body: prompt?.body ?? draft?.body ?? '' };
 	}
 	const initial = start();
 
@@ -30,7 +40,10 @@
 		if (prompt) return;
 		templates = (await attempt(() => api.effectiveTemplates(project))) ?? [];
 		existing = ((await attempt(() => api.listDeliverables(project))) ?? []).filter((d) => d.exists);
-		chosen = existing[0]?.path ?? '';
+		// A draft for a document that is still there starts out asking for changes to it.
+		const wanted = existing.find((d) => d.path === draft?.deliverable);
+		chosen = wanted?.path ?? existing[0]?.path ?? '';
+		if (wanted) kind = 'existing';
 	});
 
 	function pick(id: string) {
@@ -51,6 +64,7 @@
 		if (!saved) return;
 		if (!prompt && template?.questions.length) toast(`Added ${template.questions.length} guiding question${template.questions.length === 1 ? '' : 's'} to the thread`);
 		await refresh();
+		onsaved?.(saved);
 		onclose();
 	}
 
@@ -63,6 +77,7 @@
 
 <Modal title={prompt ? 'Edit prompt' : 'New prompt'} wide {onclose}>
 	<p class="hint" style="margin:0">A prompt asks for a deliverable. Whatever produces it — you, an assistant — lands the file in the project’s deliverables.</p>
+	{#if !prompt && draft?.note}<div class="notice info">{draft.note}</div>{/if}
 
 	{#if !prompt && templates.length}
 		<label class="field">

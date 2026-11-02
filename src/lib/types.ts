@@ -79,6 +79,16 @@ export interface Prompt {
 	runs: ClaudeRunRecord[];
 }
 
+/** What the New prompt dialog starts from when it is opened for something other than a blank prompt. */
+export interface PromptDraft {
+	title: string;
+	body: string;
+	/** An existing deliverable the prompt asks for changes to, by its live path; null leaves the choice at "a new deliverable". */
+	deliverable: string | null;
+	/** Said at the top of the dialog: where the draft came from. */
+	note: string;
+}
+
 export interface Feedback {
 	id: string;
 	threadSlug: string;
