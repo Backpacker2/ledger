@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0e1016" />
+    <title>Ledger</title>
+    <script>
+      try {
+        const t = localStorage.getItem('ledger-theme');
+        if (t) document.documentElement.dataset.theme = t;
+      } catch {}
+    </script>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="off">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>
