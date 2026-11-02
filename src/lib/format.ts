@@ -39,6 +39,15 @@ export function plainText(markdown: string, max = 140): string {
 	return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
 }
 
+/** "just now", "5 min ago", "3 h ago", or the date for anything older than a day. */
+export function ago(iso: string): string {
+	const seconds = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+	if (seconds < 45) return 'just now';
+	if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} min ago`;
+	if (seconds < 86_400) return `${Math.round(seconds / 3600)} h ago`;
+	return date(iso);
+}
+
 /** "3 posts", "1 post". */
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 

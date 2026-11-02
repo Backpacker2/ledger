@@ -159,13 +159,6 @@ pub struct SearchHit {
     pub snippet: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AppInfo {
-    pub version: String,
-    pub db_path: String,
-}
-
 // ---- requests -----------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]

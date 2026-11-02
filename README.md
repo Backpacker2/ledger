@@ -1,35 +1,66 @@
 # Ledger
 
-A local desktop app for thinking in **threads**, drafting **documents** from them, and planning the work on a **planboard**. Tauri 2 (Rust) on the back, SvelteKit (Svelte 5) on the front, one SQLite file for the data.
+A local desktop app for thinking in **threads**, drafting **documents** from them, and planning the work on a **planboard**. Tauri 2 (Rust) on the back, SvelteKit (Svelte 5) on the front. Your data is a **vault** — a folder of markdown files with YAML frontmatter, like an Obsidian vault — that can be mirrored to a private GitHub repository.
 
-This is the rewrite of the original ASP.NET ledger, which lives on the `legacy` branch. The data model carries over; the storage and the shell do not. The look follows the Leerjournaal app: a dark sidebar, calm cards, one accent colour, six themes.
+This is the rewrite of the original ASP.NET ledger, which lives on the `legacy` branch. The data model carries over, and so does the idea of plain files synced to GitHub; the shell does not. The look follows the Leerjournaal app: a dark sidebar, calm cards, one accent colour, six themes.
+
+## How it keeps your data
+
+```
+   the vault (files)  ──load at start──▶  in-memory database  ◀── every read
+         ▲                                       │
+         └────────── every change, written through ┘
+         │
+         └── GitHub (private repo): pulled at start, pushed after changes, checked every few minutes
+```
+
+- **The vault is the source of truth.** Open it in Obsidian, grep it, put it in git yourself. Edits made outside Ledger are picked up when its window regains focus.
+- **At startup** the whole vault is read into an in-memory database. Screens are answered from memory; every change is written straight back to the files (only the files that actually changed, and atomically).
+- **GitHub is the store you sync to.** Ledger talks to GitHub's REST API directly, so nothing else needs installing. Each round is a three-way comparison per file against what both sides last agreed on, so changes made on two machines merge file by file. If the same file was edited on both, this machine's version wins and the other is kept in `.ledger/conflicts/`; an edit always beats a delete. Ledger refuses to sync to a public repository.
+
+### The vault
+
+```
+threads/<thread>/thread.md          title, createdAt, linkedThreadSlugs
+threads/<thread>/posts/<id>.md      one post: frontmatter (parent, flags, timestamps) + markdown body
+documents/<id>.md                   the live draft of a document
+documents/<id>@v1.0.md              a published version, frozen
+document-types/<type>.md            name, trigger ("use when…"), questions
+user-stories/<id>.md                the story, its acceptance criteria and linked threads
+planboard.md                        the columns
+.gitignore                          lists .env and .ledger/ (kept out of GitHub)
+.env                                GitHub settings — local only
+.ledger/                            sync bookkeeping — local only
+```
+
+Files Ledger doesn't know about are left alone, so the vault can hold other notes. Hand-written files are read leniently: a folder of posts without a `thread.md` is a thread, a post without frontmatter is all body, links to things that don't exist are dropped, and the repairs are written back.
+
+### Choosing where the vault lives, and syncing it
+
+**Settings → Vault** shows the folder and lets you pick another (optionally copying the current vault into it when it's empty). The location itself is the one thing kept outside the vault, in the app's config folder.
+
+**Settings → Sync to GitHub** takes a repository (`owner/name` or a github.com URL), a branch (created on the first sync if it doesn't exist) and a repository-scoped access token. They're stored in the vault's `.env`:
+
+```
+GITHUB_REPO=owner/notes
+GITHUB_BRANCH=main
+GITHUB_TOKEN=github_pat_…
+```
+
+That file sits next to your notes but is gitignored — and never uploaded even if the `.gitignore` is edited — so the token stays on this machine. The app reads it at startup to see whether sync is set up; if all three are filled in it pulls straight away. The token never reaches the UI (only that one is saved, and its last four characters).
+
+Use a [fine-grained token](https://github.com/settings/personal-access-tokens/new) limited to that one repository with **Contents: Read and write**. The repository must already have a commit (a README will do).
 
 ## What it does
 
-- **Threads** — one per topic you're juggling. Write markdown posts, reply to any post (replies quote their parent, Teams-style), edit and delete. Threads can be linked to each other, in both directions.
-- **Document types** — a name, a "use when…" hint and a list of guiding questions. They start out empty; you define them.
-- **Documents** — drafted in a markdown editor with live preview and autosave. Starting a document in a thread seeds the type's guiding questions into it as posts (a one-time snapshot); replies to a question are shown inside its card. **Publish** a version (minor, major or a custom `M.m`) to freeze an immutable snapshot, which also drops a "version published" note in the thread that links back to it. A document can be created unlinked and given a thread later with *Start drafting*.
-- **User stories** — an id you choose (`MM01`), a summary, "As a / I want to / Such that", and acceptance criteria you tick off. A story links to any number of threads, and a thread's documents belong to its stories through that link.
-- **Planboard** — one board with customisable columns (Backlog → Drafting → Documented by default). Every story is a card: drag it, or use its arrows, to change column. A column that still holds stories can't be deleted.
-- **Search** across every post and document, with highlighted snippets.
-- **Themes** — Dark, Night, Forest, Ocean, Sepia, Light.
+- **Threads** — one per topic you're juggling. Markdown posts, replies that quote their parent, edit and delete. Threads can be linked to each other, in both directions.
+- **Document types** — a name, a "use when…" hint and a list of guiding questions.
+- **Documents** — drafted in a markdown editor with live preview and autosave. Starting a document in a thread seeds the type's guiding questions into it as posts (a one-time snapshot); replies to a question are shown inside its card. **Publish** a version (minor, major or a custom `M.m`) to freeze an immutable snapshot, which also drops a note in the thread that links back to it. A document can be created unlinked and given a thread later with *Start drafting*.
+- **User stories** — an id you choose (`MM01`), a summary, "As a / I want to / Such that", and acceptance criteria you tick off. A story links to any number of threads.
+- **Planboard** — one board with customisable columns (Backlog → Drafting → Documented by default). Drag a card, or use its arrows, to change column. A column that still holds stories can't be deleted.
+- **Search** across every post and document, with highlighted snippets. **Themes**: Dark, Night, Forest, Ocean, Sepia, Light.
 
 Deleting a thread keeps its documents (unlinked) and its stories (just unlinked from it); deleting a document keeps its published versions readable; a document type can't be deleted while documents use it.
-
-## Data model
-
-```
-threads ──< posts                      parent_id → another post (replies; no FK, so a deleted parent leaves its replies)
-threads >──< threads                   thread_links, stored once per pair
-document_types ──< document_type_questions
-document_types ──< documents >── threads (nullable)
-documents ──< document_versions        immutable snapshots; outlive the draft
-user_stories ──< acceptance_criteria
-user_stories >──< threads              story_threads
-planboard_columns ──< user_stories
-```
-
-The schema is in [`src-tauri/src/schema.sql`](src-tauri/src/schema.sql); `PRAGMA user_version` tracks migrations.
 
 ## Running it
 
@@ -41,16 +72,14 @@ npm run tauri dev      # the app, with hot reload
 npm run tauri build    # an installer / bundle
 ```
 
-Tests and checks:
+Checks:
 
 ```bash
-npm test               # Rust: the behaviour of every store, against an in-memory database
+npm test               # Rust: stores, vault round-trips, and the sync algorithm against a fake GitHub
 npm run check          # Svelte + TypeScript
 ```
 
-## Your data
-
-Everything lives in one SQLite file, `ledger.db`, in the app's data directory (`%APPDATA%\nl.molenbrugge.ledger` on Windows; *Settings* shows the exact path). Set `LEDGER_DATA_DIR` to keep it somewhere else, for example a synced folder or a scratch directory while developing. Back it up by copying the file while the app is closed.
+Environment variables, mostly for development: `LEDGER_VAULT` fixes the vault location (and locks it in Settings); `LEDGER_GITHUB_API` points the sync at another API base (GitHub Enterprise, or a mock).
 
 ## Layout
 
@@ -58,17 +87,22 @@ Everything lives in one SQLite file, `ledger.db`, in the app's data directory (`
 src/                     SvelteKit frontend (static SPA)
   routes/                threads/[slug], documents, document-types, planboard, search, settings
   lib/api.ts             typed wrappers over the Tauri commands
+  lib/ui.svelte.ts       toasts, dialogs, theme, and the backend's sync/vault events
   lib/components/        sidebar, post card, composer, story modal, dialogs …
-  app.css                the theme tokens and every component style
 src-tauri/src/
-  schema.sql             the database
+  schema.sql             the in-memory database's shape and rules
   threads.rs posts.rs documents.rs document_types.rs stories.rs planboard.rs search.rs
-                         one store per concern, plain functions over a rusqlite connection
+                         one store per concern, plain functions over the in-memory connection
+  vault.rs frontmatter.rs   files ⇄ database: layout, lenient import, canonical export, write-through
+  settings.rs            vault location, the vault's .env, .gitignore
+  sync.rs                the three-way reconcile, behind a `Remote` trait
+  github.rs              the GitHub REST implementation of `Remote`
+  syncer.rs              the background worker: debounce, poll, retry, status events
+  state.rs commands.rs   the running app and the thin Tauri command layer
   markdown.rs            markdown → HTML; raw HTML is escaped and unsafe link targets dropped
-  commands.rs            the thin Tauri command layer
-  tests.rs               behaviour tests
+  tests*.rs              behaviour tests
 ```
 
 ## Not carried over from the legacy app
 
-Git sync of the content to a GitHub branch, the read-only MCP server, PDF export and the backfill command for old version notes. The data is a single file now, so the first is mostly a backup question; the others can come back as commands if they're missed.
+The read-only MCP server, PDF export, and the backfill command for old version notes. The legacy content repository used `meta.json` and `*.json` files for threads, stories, types and the planboard; Ledger reads and writes markdown with frontmatter for all of them, so a legacy vault would need converting first.

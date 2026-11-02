@@ -66,8 +66,7 @@ pub fn add(conn: &Connection, slug: &str, body: &str, options: AddOptions) -> Re
         }
     };
 
-    let id = ids::new_id();
-    let now = ids::now();
+    let ids::Stamp { id, at: now } = ids::new_stamp();
     conn.execute(
         "INSERT INTO posts (id, thread_slug, parent_id, guiding_question, version_published, document_id,
                             document_version, created_at, updated_at, body)

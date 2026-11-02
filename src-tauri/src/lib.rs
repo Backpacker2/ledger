@@ -3,38 +3,63 @@ mod db;
 mod document_types;
 mod documents;
 mod error;
+mod frontmatter;
+mod github;
 mod ids;
 mod markdown;
 mod models;
 mod planboard;
 mod posts;
 mod search;
+mod settings;
+mod state;
 mod stories;
+mod sync;
+mod syncer;
 mod threads;
+mod vault;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_sync;
+#[cfg(test)]
+mod tests_vault;
 
-use tauri::Manager;
+use std::sync::{Arc, Mutex};
+
+use tauri::{Emitter, Manager};
+
+use crate::syncer::Event;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // LEDGER_DATA_DIR moves the database (a synced folder, a throwaway dir for testing).
-            let dir = match std::env::var_os("LEDGER_DATA_DIR") {
-                Some(dir) => dir.into(),
-                None => app.path().app_data_dir()?,
-            };
-            std::fs::create_dir_all(&dir)?;
-            let path = dir.join("ledger.db");
-            let conn = db::open(&path)?;
-            app.manage(db::Db::new(conn, path));
+            // The vault is loaded into memory before the window shows anything.
+            let core = state::Core::open(app.path().app_config_dir()?, app.path().document_dir().ok())?;
+            let sync = core.sync.clone();
+            let core = Arc::new(Mutex::new(core));
+
+            let handle = app.handle().clone();
+            let syncer = syncer::spawn(
+                core.clone(),
+                Arc::new(move |event| {
+                    let _ = match event {
+                        Event::Status(status) => handle.emit("sync-status", status),
+                        Event::VaultChanged => handle.emit("vault-changed", ()),
+                    };
+                }),
+            );
+            // If .env is filled in, this also starts with a sync.
+            syncer.reconfigure(sync.as_ref());
+
+            app.manage(state::App::new(core, syncer));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::app_info,
             commands::render_markdown,
             commands::search,
             commands::list_threads,
@@ -68,6 +93,15 @@ pub fn run() {
             commands::add_column,
             commands::rename_column,
             commands::delete_column,
+            commands::get_settings,
+            commands::sync_status,
+            commands::save_sync_settings,
+            commands::disconnect_sync,
+            commands::test_sync,
+            commands::sync_now,
+            commands::set_vault_path,
+            commands::reload_vault,
+            commands::check_vault_changes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,4 +1,5 @@
--- Ledger schema, version 1.
+-- The in-memory working copy of the vault (see db.rs). The files in the vault are the source of truth; this
+-- schema only has to hold what they describe, and enforce the rules between them.
 --
 -- Threads hold posts (markdown notes, optionally replies); documents are drafted from the thread's
 -- answers to a document type's guiding questions; user stories live on the planboard and point at the

@@ -5,12 +5,15 @@
 	import Dialogs from '$lib/components/Dialogs.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Toasts from '$lib/components/Toasts.svelte';
-	import { drawer, initTheme } from '$lib/ui.svelte';
+	import { drawer, initTheme, startBackendEvents } from '$lib/ui.svelte';
 	import type { LayoutData } from './$types';
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
-	onMount(initTheme);
+	onMount(() => {
+		initTheme();
+		return startBackendEvents();
+	});
 </script>
 
 <div class="app">

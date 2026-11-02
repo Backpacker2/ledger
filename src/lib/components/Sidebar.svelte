@@ -2,7 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { newThreadFlow } from '$lib/actions';
-	import { drawer } from '$lib/ui.svelte';
+	import { ago } from '$lib/format';
+	import { drawer, sync } from '$lib/ui.svelte';
 	import type { ThreadSummary } from '$lib/types';
 
 	let { threads }: { threads: ThreadSummary[] } = $props();
@@ -14,6 +15,16 @@
 	// Reflect an open search in the box, so refining it is one edit away.
 	$effect(() => {
 		if (path === '/search') query = page.url.searchParams.get('q') ?? '';
+	});
+
+	// What the footer says about the vault and GitHub.
+	const footer = $derived.by(() => {
+		const s = sync.status;
+		if (!s || !s.configured) return { dot: 'off', title: 'Local vault', sub: 'Not synced to GitHub' };
+		if (s.state === 'syncing') return { dot: 'warn pulse', title: 'Syncing…', sub: s.repo ?? '' };
+		if (s.state === 'error') return { dot: 'bad', title: 'Sync problem', sub: s.lastError ?? 'See Settings', error: true };
+		if (s.pending) return { dot: 'warn', title: 'Changes waiting to sync', sub: s.repo ?? '' };
+		return { dot: 'ok', title: 'Synced with GitHub', sub: s.lastSyncAt ? `${s.repo} · ${ago(s.lastSyncAt)}` : (s.repo ?? '') };
 	});
 
 	function search(e: SubmitEvent) {
@@ -59,8 +70,8 @@
 	<div class="spacer"></div>
 
 	<div class="sync-box">
-		<div class="sync-line"><span class="dot ok"></span><span>Stored on this computer</span></div>
-		<div class="sync-sub">Everything lives in a local SQLite database.</div>
+		<div class="sync-line"><span class="dot {footer.dot}"></span><span>{footer.title}</span></div>
+		<div class="sync-sub" class:error={footer.error} title={footer.sub}>{footer.sub}</div>
 		<a class="btn small" class:on={on('/settings')} href="/settings">Settings</a>
 	</div>
 </aside>

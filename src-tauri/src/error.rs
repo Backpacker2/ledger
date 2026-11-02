@@ -7,6 +7,12 @@ pub enum Error {
     Invalid(String),
     NotFound(String),
     Db(rusqlite::Error),
+    /// The vault (the folder of markdown files) could not be read or written.
+    Io(String),
+    /// Talking to GitHub, or reconciling with it, went wrong.
+    Sync(String),
+    /// GitHub moved on while a push was being prepared; the sync starts over from the new state.
+    Rejected,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -19,13 +25,24 @@ impl Error {
     pub fn not_found(message: impl Into<String>) -> Self {
         Error::NotFound(message.into())
     }
+
+    pub fn sync(message: impl Into<String>) -> Self {
+        Error::Sync(message.into())
+    }
+
+    /// An I/O failure with the path it happened on.
+    pub fn io(path: &std::path::Path, e: std::io::Error) -> Self {
+        Error::Io(format!("{}: {e}", path.display()))
+    }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Invalid(message) | Error::NotFound(message) => f.write_str(message),
+            Error::Invalid(message) | Error::NotFound(message) | Error::Sync(message) => f.write_str(message),
             Error::Db(e) => write!(f, "Database error: {e}"),
+            Error::Io(message) => write!(f, "Vault error: {message}"),
+            Error::Rejected => f.write_str("GitHub changed while syncing"),
         }
     }
 }

@@ -1,6 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-	AppInfo,
 	Bump,
 	Column,
 	DocumentSummary,
@@ -12,6 +11,8 @@ import type {
 	Story,
 	StoryDraft,
 	StoryUpdate,
+	Settings,
+	SyncStatus,
 	ThreadSummary,
 	ThreadView
 } from './types';
@@ -29,7 +30,6 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 }
 
 export const api = {
-	appInfo: () => call<AppInfo>('app_info'),
 	renderMarkdown: (body: string) => call<string>('render_markdown', { body }),
 	search: (query: string) => call<SearchHit[]>('search', { query }),
 
@@ -79,5 +79,18 @@ export const api = {
 	unlinkStoryThread: (id: string, threadSlug: string) => call<Story>('unlink_story_thread', { id, threadSlug }),
 	addColumn: (name: string) => call<Column[]>('add_column', { name }),
 	renameColumn: (id: string, name: string) => call<Column[]>('rename_column', { id, name }),
-	deleteColumn: (id: string) => call<Column[]>('delete_column', { id })
+	deleteColumn: (id: string) => call<Column[]>('delete_column', { id }),
+
+	// the vault and GitHub sync
+	getSettings: () => call<Settings>('get_settings'),
+	syncStatus: () => call<SyncStatus>('sync_status'),
+	/** A blank token keeps the saved one. */
+	saveSyncSettings: (repo: string, branch: string, token: string | null) =>
+		call<Settings>('save_sync_settings', { repo, branch, token }),
+	disconnectSync: () => call<Settings>('disconnect_sync'),
+	testSync: (repo: string, branch: string, token: string | null) => call<string>('test_sync', { repo, branch, token }),
+	syncNow: () => call<void>('sync_now'),
+	setVaultPath: (path: string, copy: boolean) => call<Settings>('set_vault_path', { path, copy }),
+	reloadVault: () => call<void>('reload_vault'),
+	checkVaultChanges: () => call<boolean>('check_vault_changes')
 };

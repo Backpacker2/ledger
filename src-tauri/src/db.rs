@@ -1,60 +1,20 @@
-use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+//! The in-memory database. It is not where anything is kept: the vault (a folder of markdown files, mirrored to
+//! GitHub) is. At startup the vault is loaded into this database; reads are answered from it, and every write
+//! goes through to the files (see `vault`). Using SQL for the working copy keeps the rules — unique ids, links
+//! that can't dangle, guards on deleting things in use — in one declarative place.
 
 use rusqlite::{Connection, OptionalExtension, Params, Row};
 
 use crate::error::Result;
 
-const SCHEMA_V1: &str = include_str!("schema.sql");
+const SCHEMA: &str = include_str!("schema.sql");
 
-/// The one connection, shared by every command. SQLite serialises writers anyway and a personal ledger
-/// never has enough concurrent traffic for a pool to pay off.
-pub struct Db {
-    conn: Mutex<Connection>,
-    path: PathBuf,
-}
-
-impl Db {
-    pub fn new(conn: Connection, path: PathBuf) -> Self {
-        Db { conn: Mutex::new(conn), path }
-    }
-
-    pub fn conn(&self) -> MutexGuard<'_, Connection> {
-        self.conn.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-pub fn open(path: &Path) -> Result<Connection> {
-    let conn = Connection::open(path)?;
-    conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")?;
-    prepare(conn)
-}
-
-#[cfg(test)]
+/// A fresh database with the schema and the default planboard columns, ready to be filled from the vault.
 pub fn open_in_memory() -> Result<Connection> {
-    prepare(Connection::open_in_memory()?)
-}
-
-fn prepare(conn: Connection) -> Result<Connection> {
+    let conn = Connection::open_in_memory()?;
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-    migrate(&conn)?;
+    conn.execute_batch(SCHEMA)?;
     Ok(conn)
-}
-
-/// `PRAGMA user_version` records how far the schema has come; later versions add `if version < N` steps here.
-fn migrate(conn: &Connection) -> Result<()> {
-    let version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version < 1 {
-        let tx = conn.unchecked_transaction()?;
-        tx.execute_batch(SCHEMA_V1)?;
-        tx.execute_batch("PRAGMA user_version = 1;")?;
-        tx.commit()?;
-    }
-    Ok(())
 }
 
 pub fn query_all<T, P: Params>(

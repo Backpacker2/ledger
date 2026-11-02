@@ -113,9 +113,35 @@ export interface SearchHit {
 	snippet: string;
 }
 
-export interface AppInfo {
+export interface SyncStatus {
+	configured: boolean;
+	repo: string | null;
+	branch: string | null;
+	state: 'disabled' | 'idle' | 'syncing' | 'error';
+	/** Changes made here that have not been pushed yet. */
+	pending: boolean;
+	lastSyncAt: string | null;
+	lastError: string | null;
+	summary: string | null;
+}
+
+export interface SyncSettings {
+	repo: string;
+	branch: string;
+	/** The token itself never reaches the screen. */
+	hasToken: boolean;
+	tokenHint: string;
+	configured: boolean;
+}
+
+export interface Settings {
+	vaultPath: string;
+	/** Fixed by the LEDGER_VAULT environment variable. */
+	vaultLocked: boolean;
+	envFile: string;
 	version: string;
-	dbPath: string;
+	sync: SyncSettings;
+	status: SyncStatus;
 }
 
 export interface StoryDraft {

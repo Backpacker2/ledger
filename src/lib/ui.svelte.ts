@@ -1,7 +1,10 @@
 // App-wide UI state: toasts, modal dialogs, the theme and the phone-width drawer. Kept as module-level
 // runes so any component can raise a toast or ask a question without prop drilling.
 
+import { listen } from '@tauri-apps/api/event';
 import { invalidateAll } from '$app/navigation';
+import { api } from './api';
+import type { SyncStatus } from './types';
 
 // ---- toasts -----------------------------------------------------------------------------------------
 
@@ -104,6 +107,58 @@ export function setTheme(id: string) {
 	} catch {
 		// Not persisted, still applied for this session.
 	}
+}
+
+// ---- the backend's news ----------------------------------------------------------------------------
+
+/** Where the sync worker has got to; kept current by events from the backend. */
+export const sync = $state<{ status: SyncStatus | null }>({ status: null });
+
+/**
+ * Listens for what the backend announces — sync progress, files changed by a pull — and checks the vault for
+ * edits made elsewhere (in Obsidian, say) whenever the window regains focus. Returns the cleanup.
+ */
+export function startBackendEvents(): () => void {
+	const cleanups: Array<() => void> = [];
+	let alive = true;
+	const keep = (unlisten: () => void) => (alive ? cleanups.push(unlisten) : unlisten());
+
+	api.syncStatus()
+		.then((status) => {
+			sync.status = status;
+		})
+		.catch(() => {});
+	listen<SyncStatus>('sync-status', (event) => {
+		sync.status = event.payload;
+	})
+		.then(keep)
+		.catch(() => {});
+	listen('vault-changed', () => {
+		void refresh();
+	})
+		.then(keep)
+		.catch(() => {});
+
+	let lastCheck = 0;
+	const onFocus = async () => {
+		if (Date.now() - lastCheck < 2000) return;
+		lastCheck = Date.now();
+		try {
+			if (await api.checkVaultChanges()) {
+				toast('Reloaded changes made outside Ledger');
+				await refresh();
+			}
+		} catch {
+			// Not worth interrupting anyone for.
+		}
+	};
+	window.addEventListener('focus', onFocus);
+
+	return () => {
+		alive = false;
+		window.removeEventListener('focus', onFocus);
+		cleanups.forEach((fn) => fn());
+	};
 }
 
 // ---- phone-width drawer -----------------------------------------------------------------------------
