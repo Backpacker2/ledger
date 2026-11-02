@@ -3,13 +3,15 @@
 	import { newThreadFlow, threadUrl } from '$lib/actions';
 	import Markdown from '$lib/components/Markdown.svelte';
 	import { ago, plural } from '$lib/format';
+	import { orderThreads } from '$lib/order';
+	import { listOrder } from '$lib/order.svelte';
 	import { attempt, refresh } from '$lib/ui.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	const project = $derived(data.project);
-	const threads = $derived(data.projects.find((p) => p.slug === project.slug)?.threads ?? []);
+	const threads = $derived(orderThreads(data.projects.find((p) => p.slug === project.slug)?.threads ?? [], listOrder.explorer));
 
 	let editing = $state(false);
 	let draft = $state('');

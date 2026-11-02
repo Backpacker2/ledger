@@ -8,6 +8,8 @@
 	import { api } from '$lib/api';
 	import { deliverableFile, deliverableUrl, formatSize, nextVersion, snapshotPath, threadUrl } from '$lib/actions';
 	import { ago, dateTime } from '$lib/format';
+	import { orderFeedback, versionsNewestFirst } from '$lib/order';
+	import { listOrder } from '$lib/order.svelte';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';
 	import type { Bump } from '$lib/types';
 	import type { PageData } from './$types';
@@ -171,6 +173,8 @@
 	}
 
 	const openCount = $derived(doc.feedback.filter((f) => f.status === 'open').length);
+	// Only how the list is read changes (see Settings); `doc.feedback` stays oldest first.
+	const feedbackList = $derived(orderFeedback(doc.feedback, listOrder.feedback));
 </script>
 
 <svelte:head><title>{doc.name} · Ledger</title></svelte:head>
@@ -219,7 +223,8 @@
 					<a class="vchip" class:on={!snapshot} href={deliverableUrl(project, doc.basePath)}>Live</a>
 				{/if}
 			{/if}
-			{#each doc.versions as v (v)}
+			<!-- Live first, then the newest version; `doc.versions` itself stays oldest first, which "latest" relies on. -->
+			{#each versionsNewestFirst(doc.versions) as v (v)}
 				<a class="vchip" class:on={doc.version === v} href={deliverableUrl(project, snapshotPath(doc.basePath, v))}>v{v}</a>
 			{:else}
 				<span class="hint">none published yet</span>
@@ -320,7 +325,7 @@
 					{/if}
 				</div>
 				<div style="display:flex;flex-direction:column;gap:10px">
-					{#each doc.feedback as f (f.id)}
+					{#each feedbackList as f (f.id)}
 						<FeedbackCard {project} thread={f.threadSlug} feedback={f} onDeliverable />
 					{/each}
 				</div>

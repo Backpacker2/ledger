@@ -15,6 +15,8 @@
 	import UploadCard from '$lib/components/UploadCard.svelte';
 	import UploadModal from '$lib/components/UploadModal.svelte';
 	import { date, dayKey, dayLabel, plural } from '$lib/format';
+	import { orderFlow } from '$lib/order';
+	import { listOrder } from '$lib/order.svelte';
 	import { attempt, confirmDialog, promptDialog, refresh } from '$lib/ui.svelte';
 	import type { Feedback, Post, Prompt, Story, Upload } from '$lib/types';
 	import type { PageData } from './$types';
@@ -61,8 +63,8 @@
 		| { kind: 'feedback'; key: string; at: string; feedback: Feedback }
 		| { kind: 'upload'; key: string; at: string; upload: Upload };
 
-	/** Notes, prompts, feedback and uploads in the order they happened, each day under its own heading. */
-	const flow = $derived.by(() => {
+	/** Notes, prompts, feedback and uploads in the order they happened, oldest first. */
+	const chronological = $derived.by(() => {
 		const entries: Entry[] = [
 			...posts.filter((p) => !structure.embedded.has(p.id)).map((post): Entry => ({ kind: 'post', key: `p-${post.id}`, at: post.createdAt, post })),
 			...thread.prompts.map((prompt): Entry => ({ kind: 'prompt', key: `pr-${prompt.id}`, at: prompt.createdAt, prompt })),
@@ -70,6 +72,12 @@
 			...thread.uploads.map((upload): Entry => ({ kind: 'upload', key: `u-${upload.id}`, at: upload.uploadedAt, upload }))
 		];
 		entries.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+		return entries;
+	});
+
+	/** The same entries read the way Settings says (oldest or newest first), each day under its own heading. */
+	const flow = $derived.by(() => {
+		const entries = orderFlow(chronological, listOrder.posts);
 		return entries.map((entry, i) => ({
 			entry,
 			day: dayKey(entry.at),
@@ -102,7 +110,8 @@
 		setTimeout(() => el.classList.remove('flash'), 1400);
 	}
 
-	const toBottom = () => scroller && (scroller.scrollTop = scroller.scrollHeight);
+	// The newest item is at the bottom when posts read oldest first, and at the top when they read newest first.
+	const toNewest = () => scroller && (scroller.scrollTop = listOrder.posts === 'asc' ? scroller.scrollHeight : 0);
 
 	// Arriving in a thread lands on the item a search hit (or a fresh screenshot) pointed at, or else the
 	// newest one; a new item scrolls itself into view.
@@ -115,10 +124,10 @@
 		if (key !== seenThread) {
 			seenThread = key;
 			seenCount = count;
-			tick().then(() => (target && document.getElementById(target) ? jump(target) : toBottom()));
+			tick().then(() => (target && document.getElementById(target) ? jump(target) : toNewest()));
 		} else if (count > seenCount) {
 			seenCount = count;
-			tick().then(toBottom);
+			tick().then(toNewest);
 		} else {
 			seenCount = count;
 		}
@@ -165,7 +174,8 @@
 	}
 
 	const storyIds = $derived(new Set(thread.stories.map((s) => s.id)));
-	const lastActivity = $derived(flow.at(-1)?.entry.at ?? thread.createdAt);
+	// From the oldest-first list: the last item of `flow` is the oldest when posts read newest first.
+	const lastActivity = $derived(chronological.at(-1)?.at ?? thread.createdAt);
 </script>
 
 <svelte:head><title>{thread.title} · Ledger</title></svelte:head>

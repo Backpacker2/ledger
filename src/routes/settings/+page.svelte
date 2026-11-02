@@ -2,6 +2,7 @@
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import HotkeyInput from '$lib/components/HotkeyInput.svelte';
+	import OrderSettings from '$lib/components/OrderSettings.svelte';
 	import { api } from '$lib/api';
 	import { ago, dateTime } from '$lib/format';
 	import { attempt, confirmDialog, refresh, setTheme, sync, theme, themes, toast } from '$lib/ui.svelte';
@@ -310,6 +311,9 @@ templates/&lt;id&gt;.md                               templates for every projec
 				{/each}
 			</div>
 		</div>
+
+		<!-- Display order of feedback and threads -->
+		<OrderSettings />
 
 		<div class="hint" style="padding:0 4px 8px">Ledger {settings.version}</div>
 	</div>

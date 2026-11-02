@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
 	import { snapshotPath } from '$lib/actions';
+	import { versionsNewestFirst } from '$lib/order';
 	import { attempt, refresh } from '$lib/ui.svelte';
 	import type { DeliverableSummary } from '$lib/types';
 	import Modal from './Modal.svelte';
@@ -21,7 +22,7 @@
 	const options = $derived(
 		all.flatMap((d) => [
 			...(d.exists ? [{ value: d.path, label: d.path }] : []),
-			...d.versions.map((v) => ({ value: snapshotPath(d.path, v), label: `${d.path} · version ${v}` }))
+			...versionsNewestFirst(d.versions).map((v) => ({ value: snapshotPath(d.path, v), label: `${d.path} · version ${v}` }))
 		])
 	);
 

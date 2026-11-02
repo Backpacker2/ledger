@@ -3,6 +3,8 @@
 	import { page } from '$app/state';
 	import { newProjectFlow, newThreadFlow, projectUrl, threadUrl } from '$lib/actions';
 	import { ago } from '$lib/format';
+	import { orderThreads } from '$lib/order';
+	import { listOrder } from '$lib/order.svelte';
 	import { drawer, sync } from '$lib/ui.svelte';
 	import type { ProjectSummary } from '$lib/types';
 
@@ -109,7 +111,7 @@
 			</div>
 			{#if unfolded}
 				<div class="folder-children">
-					{#each p.threads as t (t.slug)}
+					{#each orderThreads(p.threads, listOrder.explorer) as t (t.slug)}
 						<a class="tree-item" class:active={path === threadUrl(p.slug, t.slug)} href={threadUrl(p.slug, t.slug)}>
 							<span class="dot"></span>
 							<span class="name">{t.title}</span>
