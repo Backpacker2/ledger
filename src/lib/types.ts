@@ -452,3 +452,101 @@ export interface ClaudeRunEvent {
 	run: ClaudeRun;
 	chunk: { seq: number; text: string } | null;
 }
+
+// ---- Trello sync (feat/trello-sync) -----------------------------------------------------------------
+
+export interface TrelloMember {
+	id: string;
+	username: string;
+	fullName: string;
+}
+
+export interface TrelloBoard {
+	id: string;
+	name: string;
+}
+
+export interface TrelloList {
+	id: string;
+	name: string;
+}
+
+/** What the last Trello round did, and what it wants a person to know. */
+export interface TrelloReport {
+	cardsCreated: number;
+	cardsUpdated: number;
+	itemsCreated: number;
+	itemsUpdated: number;
+	converted: number;
+	detached: number;
+	conflicts: number;
+	/** Tasks without a list and cards without a column: left out. */
+	unmatched: number;
+	skipped: number;
+	/** Items that are not syncing because their card is gone or no longer the person's. */
+	unlinked: number;
+	vaultWrites: number;
+	notes: string[];
+}
+
+export interface TrelloStatus {
+	/** There are a key and token, a person and at least one linked project. */
+	configured: boolean;
+	state: 'disabled' | 'idle' | 'syncing' | 'error';
+	/** Changes made here that the sync hasn't looked at yet. */
+	pending: boolean;
+	lastSyncAt: string | null;
+	lastError: string | null;
+	summary: string | null;
+	report: TrelloReport | null;
+}
+
+export interface TrelloProject {
+	slug: string;
+	name: string;
+	/** The Trello board the project is linked to; a project with none isn't synced. */
+	board: string | null;
+	boardName: string | null;
+}
+
+/** An item that stopped syncing because its card was archived, deleted, moved or is no longer the person's. */
+export interface TrelloUnlinkedItem {
+	project: string;
+	projectName: string;
+	kind: 'task' | 'story';
+	id: string;
+	title: string;
+	reason: string;
+}
+
+export interface TrelloView {
+	/** The key and token themselves never reach the screen. */
+	hasKey: boolean;
+	keyHint: string;
+	hasToken: boolean;
+	tokenHint: string;
+	/** The one person whose cards are synced. */
+	member: TrelloMember | null;
+	configured: boolean;
+	projects: TrelloProject[];
+	unlinked: TrelloUnlinkedItem[];
+	status: TrelloStatus;
+	settingsFile: string;
+	secretsFile: string;
+}
+
+export interface TrelloColumnChoice {
+	id: string;
+	name: string;
+	/** "auto" (the list with the same name), "none" (not synced) or the id of a list. */
+	choice: string;
+	listId: string | null;
+	listName: string | null;
+}
+
+export interface TrelloMapping {
+	lists: TrelloList[];
+	columns: TrelloColumnChoice[];
+	/** Lists no column uses: their cards aren't added. */
+	unusedLists: string[];
+}

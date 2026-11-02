@@ -477,6 +477,8 @@ fn export_stories_and_tasks(conn: &Connection, files: &mut BTreeMap<String, Stri
             }
             frontmatter::set(&mut meta, "createdAt", story.created_at);
             frontmatter::set(&mut meta, "updatedAt", story.updated_at);
+            frontmatter::set_opt(&mut meta, "trelloCard", story.trello_card.as_deref());
+            frontmatter::set_opt(&mut meta, "trelloUnlinked", story.trello_unlinked.as_deref());
             files.insert(story_file(&project, &story.id), frontmatter::render(&meta, &story.notes));
         }
 
@@ -489,6 +491,8 @@ fn export_stories_and_tasks(conn: &Connection, files: &mut BTreeMap<String, Stri
             frontmatter::set_opt(&mut meta, "thread", task.thread_slug.as_deref());
             frontmatter::set(&mut meta, "createdAt", task.created_at);
             frontmatter::set(&mut meta, "updatedAt", task.updated_at);
+            frontmatter::set_opt(&mut meta, "trelloCard", task.trello_card.as_deref());
+            frontmatter::set_opt(&mut meta, "trelloUnlinked", task.trello_unlinked.as_deref());
             files.insert(task_file(&project, &task.id), frontmatter::render(&meta, &task.body));
         }
     }
@@ -842,8 +846,8 @@ fn import_stories(conn: &Connection, source: &Source, project: &str, threads: &H
         let Some((meta, notes)) = source.parsed(&rel) else { continue };
         let created_at = meta.text("createdAt").unwrap_or_else(|| source.stamp(&rel));
         let inserted = conn.execute(
-            "INSERT OR IGNORE INTO user_stories (project_slug, id, summary, role, want, reason, notes, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT OR IGNORE INTO user_stories (project_slug, id, summary, role, want, reason, notes, created_at, updated_at, trello_card, trello_unlinked)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 project,
                 id,
@@ -854,6 +858,8 @@ fn import_stories(conn: &Connection, source: &Source, project: &str, threads: &H
                 notes,
                 created_at,
                 meta.text("updatedAt").unwrap_or_else(|| created_at.clone()),
+                meta.text("trelloCard"),
+                meta.text("trelloUnlinked"),
             ],
         )?;
         if inserted == 0 {
@@ -897,9 +903,21 @@ fn import_tasks(conn: &Connection, source: &Source, project: &str, threads: &Has
         let story = meta.text("story").and_then(|s| crate::stories::get(conn, project, &s).ok()).map(|s| s.id);
         let thread = meta.text("thread").filter(|t| threads.contains(t));
         conn.execute(
-            "INSERT OR IGNORE INTO tasks (id, project_slug, title, body, column_id, story_id, thread_slug, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![id, project, title, body, column, story, thread, created_at, meta.text("updatedAt").unwrap_or_else(|| created_at.clone())],
+            "INSERT OR IGNORE INTO tasks (id, project_slug, title, body, column_id, story_id, thread_slug, created_at, updated_at, trello_card, trello_unlinked)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                id,
+                project,
+                title,
+                body,
+                column,
+                story,
+                thread,
+                created_at,
+                meta.text("updatedAt").unwrap_or_else(|| created_at.clone()),
+                meta.text("trelloCard"),
+                meta.text("trelloUnlinked"),
+            ],
         )?;
     }
     Ok(())

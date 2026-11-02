@@ -92,7 +92,8 @@ fn require_name(name: &str) -> Result<String> {
 // ---- tasks ------------------------------------------------------------------------------------------
 
 const TASK_SQL: &str = "
-    SELECT t.id, t.title, t.body, t.column_id, s.id, s.summary, t.thread_slug, th.title, t.created_at, t.updated_at
+    SELECT t.id, t.title, t.body, t.column_id, s.id, s.summary, t.thread_slug, th.title, t.created_at, t.updated_at,
+           t.trello_card, t.trello_unlinked
     FROM tasks t
     LEFT JOIN user_stories s ON s.project_slug = t.project_slug AND s.id = t.story_id
     LEFT JOIN threads th ON th.project_slug = t.project_slug AND th.slug = t.thread_slug
@@ -110,6 +111,8 @@ fn task_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TaskView> {
         thread_title: r.get(7)?,
         created_at: r.get(8)?,
         updated_at: r.get(9)?,
+        trello_card: r.get(10)?,
+        trello_unlinked: r.get(11)?,
     })
 }
 

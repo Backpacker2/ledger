@@ -131,6 +131,8 @@ impl App {
         // Always, not only when `persist` wrote something: some changes are made to files directly (a published
         // image, an upload), which the write-through doesn't count.
         self.syncer.dirty();
+        // The Trello sync (if it is set up) looks at what changed after a pause, like the GitHub sync does.
+        crate::trello::notify_vault_changed();
         Ok(out)
     }
 }

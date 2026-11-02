@@ -200,3 +200,38 @@ export const claudeCodeApi = {
 	runs: () => call<ClaudeRunSnapshot[]>('claude_code_runs'),
 	run: (runId: string) => call<ClaudeRunSnapshot>('claude_code_run', { runId })
 };
+
+// ---- Trello sync (feat/trello-sync) -----------------------------------------------------------------
+
+import type {
+	TrelloBoard,
+	TrelloMapping,
+	TrelloMember,
+	TrelloStatus,
+	TrelloView
+} from './types';
+
+export const trelloApi = {
+	trelloGet: () => call<TrelloView>('trello_get'),
+	trelloStatus: () => call<TrelloStatus>('trello_status'),
+	/** Tries the key and token on screen (a blank one means the saved one) without saving them. Resolves to a message naming the account. */
+	trelloTest: (apiKey: string | null, token: string | null) => call<string>('trello_test', { apiKey, token }),
+	/** A blank key or token keeps the saved one. */
+	trelloSaveCredentials: (apiKey: string | null, token: string | null) =>
+		call<TrelloView>('trello_save_credentials', { apiKey, token }),
+	trelloDisconnect: () => call<TrelloView>('trello_disconnect'),
+	trelloBoards: () => call<TrelloBoard[]>('trello_boards'),
+	trelloBoardMembers: (board: string) => call<TrelloMember[]>('trello_board_members', { board }),
+	/** Chooses the one person to sync for, from the members of `board`. */
+	trelloSaveMember: (board: string, member: string) => call<TrelloView>('trello_save_member', { board, member }),
+	/** Links a project to a board; `null` stops syncing the project. */
+	trelloLinkProject: (project: string, board: string | null) => call<TrelloView>('trello_link_project', { project, board }),
+	trelloProjectMapping: (project: string) => call<TrelloMapping>('trello_project_mapping', { project }),
+	/** `choice` is "auto", "none" or a list id. */
+	trelloSetColumnList: (project: string, column: string, choice: string) =>
+		call<void>('trello_set_column_list', { project, column, choice }),
+	trelloSyncNow: () => call<void>('trello_sync_now'),
+	/** Gives an item that stopped syncing a new card on the next sync (the old card is left alone). */
+	trelloRelinkItem: (project: string, kind: 'task' | 'story', id: string) =>
+		call<TrelloView>('trello_relink_item', { project, kind, id })
+};

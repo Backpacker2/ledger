@@ -185,6 +185,9 @@ CREATE TABLE user_stories (
     notes        TEXT NOT NULL DEFAULT '',
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL,
+    -- The Trello card this story is synced with, and, once that sync has stopped, why (see trello_sync.rs).
+    trello_card     TEXT,
+    trello_unlinked TEXT,
     PRIMARY KEY (project_slug, id)
 );
 
@@ -220,6 +223,9 @@ CREATE TABLE tasks (
     thread_slug  TEXT,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL,
+    -- The Trello card this task is synced with, and, once that sync has stopped, why (see trello_sync.rs).
+    trello_card     TEXT,
+    trello_unlinked TEXT,
     FOREIGN KEY (project_slug, column_id) REFERENCES project_columns(project_slug, id),
     FOREIGN KEY (project_slug) REFERENCES projects(slug) ON DELETE CASCADE
 );

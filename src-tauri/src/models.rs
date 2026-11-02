@@ -248,6 +248,9 @@ pub struct StoryView {
     pub task_count: i64,
     pub created_at: String,
     pub updated_at: String,
+    /// The Trello card this story is synced with, if any, and (when the sync has stopped) why.
+    pub trello_card: Option<String>,
+    pub trello_unlinked: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -270,6 +273,9 @@ pub struct TaskView {
     pub thread_title: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// The Trello card this task is synced with, if any, and (when the sync has stopped) why.
+    pub trello_card: Option<String>,
+    pub trello_unlinked: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

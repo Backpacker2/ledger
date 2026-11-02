@@ -28,10 +28,21 @@ mod threads;
 mod uploads;
 mod vault;
 
+// ---- Trello sync (feat/trello-sync) ----
+mod trello;
+mod trello_api;
+mod trello_card;
+mod trello_config;
+mod trello_ledger;
+mod trello_sync;
+// ---- end Trello sync ----
+
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tests_claude_code;
+#[cfg(test)]
+mod tests_trello;
 #[cfg(test)]
 mod tests_crypto;
 #[cfg(test)]
@@ -64,6 +75,7 @@ pub fn run() {
             let core = state::Core::open(config_dir.clone(), app.path().document_dir().ok())?;
             let sync = core.sync.clone();
             let core = Arc::new(Mutex::new(core));
+            let trello_core = core.clone(); // for the Trello sync (feat/trello-sync), started below
 
             let handle = app.handle().clone();
             let syncer = syncer::spawn(
@@ -79,6 +91,7 @@ pub fn run() {
             syncer.reconfigure(sync.as_ref());
 
             app.manage(state::App::new(core, syncer, screenshot::Screenshots::new()));
+            trello::start_app(app.handle(), trello_core); // feat/trello-sync: its own worker, needs the App state above
             screenshot::register_saved(app.handle());
             Ok(())
         })
@@ -153,6 +166,21 @@ pub fn run() {
             commands::generate_encryption_key,
             commands::import_encryption_key,
             commands::export_recovery_key,
+            // ---- Trello sync (feat/trello-sync) ----
+            trello::trello_get,
+            trello::trello_status,
+            trello::trello_test,
+            trello::trello_save_credentials,
+            trello::trello_disconnect,
+            trello::trello_boards,
+            trello::trello_board_members,
+            trello::trello_save_member,
+            trello::trello_link_project,
+            trello::trello_project_mapping,
+            trello::trello_set_column_list,
+            trello::trello_sync_now,
+            trello::trello_relink_item,
+            // ---- end Trello sync ----
             commands::set_vault_path,
             commands::reload_vault,
             commands::check_vault_changes,
