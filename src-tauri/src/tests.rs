@@ -259,6 +259,30 @@ fn a_prompt_from_a_template_seeds_its_questions_once_and_comes_after_them() {
     assert!(prompts::list(&c, &p, &t).unwrap().is_empty());
 }
 
+#[test]
+fn a_prompt_can_be_made_for_an_existing_deliverable_or_for_a_new_one() {
+    let c = conn();
+    let (p, t) = setup(&c);
+    deliverables::create(&c, &p, "Pricing brief", "# Pricing brief\n\nDraft.\n").unwrap();
+
+    // For an existing deliverable: it is linked, the way "Link existing" would.
+    let revise = prompts::create_linked(&c, &p, &t, "Revise it", "Tighten the pricing brief.", None, Some("pricing-brief.md")).unwrap();
+    assert_eq!(revise.deliverables.iter().map(|d| (d.path.as_str(), d.exists)).collect::<Vec<_>>(), [("pricing-brief.md", true)]);
+    assert_eq!(prompts::get(&c, &p, &t, &revise.id).unwrap().deliverables.len(), 1);
+
+    // For a new one: nothing is linked until something is produced. A blank choice is the same as none.
+    for none in [None, Some(""), Some("  ")] {
+        let fresh = prompts::create_linked(&c, &p, &t, "Another", "Write a new brief.", None, none).unwrap();
+        assert!(fresh.deliverables.is_empty(), "{none:?}");
+    }
+
+    // One that isn't there is refused before anything is written.
+    let before = prompts::list(&c, &p, &t).unwrap().len();
+    assert_eq!(message(prompts::create_linked(&c, &p, &t, "", "x", None, Some("nope.md")).unwrap_err()), "Deliverable not found");
+    assert_eq!(prompts::list(&c, &p, &t).unwrap().len(), before, "no prompt is left half made");
+    assert_eq!(message(prompts::create_linked(&c, &p, &t, "", "   ", None, Some("pricing-brief.md")).unwrap_err()), "Say what you want delivered");
+}
+
 // ---- deliverables -----------------------------------------------------------------------------------
 
 #[test]

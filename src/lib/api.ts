@@ -65,8 +65,9 @@ export const api = {
 	deletePost: (project: string, thread: string, id: string) => call<void>('delete_post', { project, thread, id }),
 
 	// prompts
-	createPrompt: (project: string, thread: string, title: string, body: string, templateId: string | null) =>
-		call<Prompt>('create_prompt', { project, thread, title, body, templateId }),
+	/** `deliverable` is an existing deliverable the prompt asks for changes to; null asks for a new one. */
+	createPrompt: (project: string, thread: string, title: string, body: string, templateId: string | null, deliverable: string | null = null) =>
+		call<Prompt>('create_prompt', { project, thread, title, body, templateId, deliverable }),
 	updatePrompt: (project: string, thread: string, id: string, title: string, body: string) =>
 		call<Prompt>('update_prompt', { project, thread, id, title, body }),
 	deletePrompt: (project: string, thread: string, id: string) => call<void>('delete_prompt', { project, thread, id }),

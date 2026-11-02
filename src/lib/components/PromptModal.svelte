@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
 	import { attempt, refresh, toast } from '$lib/ui.svelte';
-	import type { Prompt, Template } from '$lib/types';
+	import type { DeliverableSummary, Prompt, Template } from '$lib/types';
 	import Modal from './Modal.svelte';
 
 	/** `prompt` is null when writing a new one. The modal is mounted fresh each time, so it only reads the initial values. */
@@ -19,10 +19,18 @@
 	let templates = $state<Template[]>([]);
 	let saving = $state(false);
 
+	// What the prompt asks for: a new deliverable, or changes to one that is already in the project.
+	let kind = $state<'new' | 'existing'>('new');
+	let existing = $state<DeliverableSummary[]>([]);
+	let chosen = $state('');
+
 	const template = $derived(templates.find((t) => t.id === templateId));
 
 	onMount(async () => {
-		if (!prompt) templates = (await attempt(() => api.effectiveTemplates(project))) ?? [];
+		if (prompt) return;
+		templates = (await attempt(() => api.effectiveTemplates(project))) ?? [];
+		existing = ((await attempt(() => api.listDeliverables(project))) ?? []).filter((d) => d.exists);
+		chosen = existing[0]?.path ?? '';
 	});
 
 	function pick(id: string) {
@@ -35,7 +43,9 @@
 	async function save() {
 		saving = true;
 		const saved = await attempt(() =>
-			prompt ? api.updatePrompt(project, thread, prompt.id, title, body) : api.createPrompt(project, thread, title, body, templateId || null)
+			prompt
+				? api.updatePrompt(project, thread, prompt.id, title, body)
+				: api.createPrompt(project, thread, title, body, templateId || null, kind === 'existing' ? chosen : null)
 		);
 		saving = false;
 		if (!saved) return;
@@ -85,10 +95,31 @@
 		<textarea bind:value={body} rows="8" placeholder="Describe the deliverable: audience, scope, what good looks like. Markdown works."></textarea>
 	</label>
 
+	{#if !prompt}
+		<div class="field">
+			Deliverable
+			<label class="check">
+				<input type="radio" bind:group={kind} value="new" />
+				A new deliverable: the prompt asks for a file that doesn’t exist yet
+			</label>
+			<label class="check">
+				<input type="radio" bind:group={kind} value="existing" disabled={!existing.length} />
+				An existing deliverable: the prompt asks for changes to it{existing.length ? '' : ' (there are none in this project yet)'}
+			</label>
+			{#if kind === 'existing'}
+				<select bind:value={chosen} aria-label="The existing deliverable">
+					{#each existing as d (d.path)}
+						<option value={d.path}>{d.path}{d.versions.length ? ` · latest version v${d.versions.at(-1)}` : ' · not published yet'}</option>
+					{/each}
+				</select>
+			{/if}
+		</div>
+	{/if}
+
 	{#snippet footer()}
 		<span class="spacer-h"></span>
 		<span class="hint">Ctrl+Enter saves</span>
 		<button class="btn ghost" onclick={onclose}>Cancel</button>
-		<button class="btn primary" onclick={save} disabled={saving || !title.trim()}>{prompt ? 'Save' : 'Create prompt'}</button>
+		<button class="btn primary" onclick={save} disabled={saving || !title.trim() || (kind === 'existing' && !chosen)}>{prompt ? 'Save' : 'Create prompt'}</button>
 	{/snippet}
 </Modal>

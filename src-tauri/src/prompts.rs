@@ -101,6 +101,31 @@ pub fn create(conn: &Connection, project: &str, thread: &str, title: &str, body:
     get(conn, project, thread, &id)
 }
 
+/// Writes the request, and when `deliverable` is given links that existing deliverable to it. A deliverable that isn't
+/// there is refused before anything is written, so no prompt is left half made. With none, the prompt asks for a new
+/// deliverable: nothing is linked until one is produced.
+pub fn create_linked(
+    conn: &Connection,
+    project: &str,
+    thread: &str,
+    title: &str,
+    body: &str,
+    template_id: Option<&str>,
+    deliverable: Option<&str>,
+) -> Result<PromptView> {
+    let deliverable = deliverable.map(str::trim).filter(|d| !d.is_empty());
+    if let Some(path) = deliverable
+        && !deliverables::exists(conn, project, path)?
+    {
+        return Err(Error::not_found("Deliverable not found"));
+    }
+    let prompt = create(conn, project, thread, title, body, template_id)?;
+    match deliverable {
+        Some(path) => link_deliverable(conn, project, thread, &prompt.id, path),
+        None => Ok(prompt),
+    }
+}
+
 pub fn update(conn: &Connection, project: &str, thread: &str, id: &str, title: Option<&str>, body: Option<&str>) -> Result<PromptView> {
     get(conn, project, thread, id)?; // not found if it does not exist
     if let Some(title) = title {

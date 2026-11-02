@@ -126,8 +126,16 @@ pub fn delete_post(app: State<App>, project: String, thread: String, id: String)
 // ---- prompts ----------------------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn create_prompt(app: State<App>, project: String, thread: String, title: String, body: String, template_id: Option<String>) -> Result<PromptView> {
-    app.mutate(|c, _| prompts::create(c, &project, &thread, &title, &body, template_id.as_deref()))
+pub fn create_prompt(
+    app: State<App>,
+    project: String,
+    thread: String,
+    title: String,
+    body: String,
+    template_id: Option<String>,
+    deliverable: Option<String>,
+) -> Result<PromptView> {
+    app.mutate(|c, _| prompts::create_linked(c, &project, &thread, &title, &body, template_id.as_deref(), deliverable.as_deref()))
 }
 
 #[tauri::command]
