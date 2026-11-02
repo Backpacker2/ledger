@@ -7,10 +7,12 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
+use crate::encrypted_remote::EncryptedRemote;
 use crate::error::Result;
 use crate::github::GithubRemote;
 use crate::ids;
-use crate::settings::SyncConfig;
+use crate::keystore;
+use crate::settings::{self, SyncConfig};
 use crate::state::Core;
 use crate::sync::{self, Applier, LocalOp};
 
@@ -32,6 +34,8 @@ pub struct SyncStatus {
     pub state: String,
     /// Changes made here that have not been pushed yet.
     pub pending: bool,
+    /// Whether syncs encrypt what they upload: the setting as it stood when the last sync started.
+    pub encrypted: bool,
     pub last_sync_at: Option<String>,
     pub last_error: Option<String>,
     pub summary: Option<String>,
@@ -106,7 +110,9 @@ fn update(status: &Mutex<SyncStatus>, emit: &Emit, change: impl FnOnce(&mut Sync
 
 pub fn spawn(core: Arc<Mutex<Core>>, emit: Emit) -> Syncer {
     let (tx, rx) = channel();
-    let status = Arc::new(Mutex::new(SyncStatus { state: "disabled".into(), ..SyncStatus::default() }));
+    // Right from the start the bar says whether syncs will encrypt, not only once the first one has begun.
+    let encrypted = settings::read_settings(lock(&core).vault.root()).encryption.enabled;
+    let status = Arc::new(Mutex::new(SyncStatus { state: "disabled".into(), encrypted, ..SyncStatus::default() }));
     {
         let (status, emit) = (status.clone(), emit.clone());
         std::thread::spawn(move || worker(rx, core, status, emit));
@@ -151,9 +157,9 @@ fn worker(rx: Receiver<Msg>, core: Arc<Mutex<Core>>, status: Arc<Mutex<SyncStatu
 
 /// One sync. Returns whether it worked.
 fn run_once(core: &Arc<Mutex<Core>>, status: &Mutex<SyncStatus>, emit: &Emit) -> bool {
-    let (root, config) = {
+    let (root, config, keys) = {
         let core = lock(core);
-        (core.vault.root().to_path_buf(), core.sync.clone())
+        (core.vault.root().to_path_buf(), core.sync.clone(), core.keys.clone())
     };
     let Some(config) = config else {
         update(status, emit, |s| {
@@ -164,16 +170,24 @@ fn run_once(core: &Arc<Mutex<Core>>, status: &Mutex<SyncStatus>, emit: &Emit) ->
         return true;
     };
 
+    let encrypting = settings::read_settings(&root).encryption.enabled;
     update(status, emit, |s| {
         s.configured = true;
         s.repo = Some(config.repo.clone());
         s.branch = Some(config.branch.clone());
+        s.encrypted = encrypting;
         s.state = "syncing".into();
     });
 
-    let result = GithubRemote::new(&config).and_then(|remote| {
+    // With encryption on, a missing key stops the sync here, before anything is read from or sent to GitHub.
+    let result = keystore::key_for_sync(&root, &*keys).and_then(|key| {
+        let remote = GithubRemote::new(&config)?;
         remote.ensure_private()?;
-        sync::run(&root, &config.repo, &config.branch, &remote, &CoreApplier { core: core.clone() })
+        let applier = CoreApplier { core: core.clone() };
+        match key {
+            Some(key) => sync::run(&root, &config.repo, &config.branch, &EncryptedRemote::new(remote, key), &applier),
+            None => sync::run(&root, &config.repo, &config.branch, &remote, &applier),
+        }
     });
 
     match result {

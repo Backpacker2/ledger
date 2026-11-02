@@ -174,7 +174,7 @@ impl Remote for GithubRemote {
         Ok(files)
     }
 
-    fn blob(&self, sha: &str) -> Result<Vec<u8>> {
+    fn blob(&self, _path: &str, sha: &str) -> Result<Vec<u8>> {
         let response = self.request(Method::GET, &self.repo_path(&format!("/git/blobs/{sha}")), None, "application/vnd.github.raw+json")?;
         let status = response.status();
         if !status.is_success() {

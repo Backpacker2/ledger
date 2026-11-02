@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use rusqlite::Connection;
 
 use crate::error::{Error, Result};
+use crate::keystore::{EnvFileKeyStore, KeyStore};
 use crate::screenshot::Screenshots;
 use crate::settings::{self, SyncConfig};
 use crate::syncer::Syncer;
@@ -21,6 +22,8 @@ pub struct Core {
     pub config_dir: PathBuf,
     /// The vault location came from `LEDGER_VAULT`, so Settings can't change it.
     pub vault_from_env: bool,
+    /// Where the sync encryption key is kept: the vault's `.ledger/.env`, unless a test puts another here.
+    pub keys: Arc<dyn KeyStore>,
 }
 
 impl Core {
@@ -34,7 +37,7 @@ impl Core {
         let mut vault = Vault::open(root)?;
         let conn = vault.load()?;
         let sync = settings::read_env(vault.root()).complete();
-        Ok(Core { conn, vault, sync, config_dir, vault_from_env })
+        Ok(Core { conn, vault, sync, config_dir, vault_from_env, keys: Arc::new(EnvFileKeyStore) })
     }
 
     /// Reads everything in again from the files.

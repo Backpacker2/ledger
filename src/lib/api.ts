@@ -5,6 +5,7 @@ import type {
 	Column,
 	Deliverable,
 	DeliverableSummary,
+	EncryptionStatus,
 	Feedback,
 	Post,
 	ProjectSummary,
@@ -146,6 +147,17 @@ export const api = {
 	setVaultPath: (path: string, copy: boolean) => call<Settings>('set_vault_path', { path, copy }),
 	reloadVault: () => call<void>('reload_vault'),
 	checkVaultChanges: () => call<boolean>('check_vault_changes'),
+
+	// encrypting what is synced (the key sits in the vault's .ledger/.env, which is never synced)
+	encryptionStatus: () => call<EncryptionStatus>('encryption_status'),
+	/** Turning it on needs a key. It also starts a sync, which re-uploads every file encrypted. */
+	setEncryptionEnabled: (enabled: boolean) => call<Settings>('set_encryption_enabled', { enabled }),
+	/** With a key already on this machine, `replace` must be true. */
+	generateEncryptionKey: (replace: boolean) => call<Settings>('generate_encryption_key', { replace }),
+	/** A recovery string, or the bare key as hex or base64. With a key already on this machine, `replace` must be true. */
+	importEncryptionKey: (key: string, replace: boolean) => call<Settings>('import_encryption_key', { key, replace }),
+	/** The one call that returns the key (as its recovery string). Only on an explicit request. */
+	exportRecoveryKey: () => call<string>('export_recovery_key'),
 
 	// screenshots
 	saveScreenshotHotkey: (hotkey: string) => call<Settings>('save_screenshot_hotkey', { hotkey }),

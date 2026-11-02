@@ -58,10 +58,12 @@
 	const footer = $derived.by(() => {
 		const s = sync.status;
 		if (!s || !s.configured) return { dot: 'off', title: 'Local vault', sub: 'Not synced to GitHub' };
-		if (s.state === 'syncing') return { dot: 'warn pulse', title: 'Syncing…', sub: s.repo ?? '' };
+		// Next to where the files go, whether they go up sealed.
+		const where = `${s.repo ?? ''} · ${s.encrypted ? 'encrypted' : 'not encrypted'}`;
+		if (s.state === 'syncing') return { dot: 'warn pulse', title: 'Syncing…', sub: where };
 		if (s.state === 'error') return { dot: 'bad', title: 'Sync problem', sub: s.lastError ?? 'See Settings', error: true };
-		if (s.pending) return { dot: 'warn', title: 'Changes waiting to sync', sub: s.repo ?? '' };
-		return { dot: 'ok', title: 'Synced with GitHub', sub: s.lastSyncAt ? `${s.repo} · ${ago(s.lastSyncAt)}` : (s.repo ?? '') };
+		if (s.pending) return { dot: 'warn', title: 'Changes waiting to sync', sub: where };
+		return { dot: 'ok', title: 'Synced with GitHub', sub: s.lastSyncAt ? `${where} · ${ago(s.lastSyncAt)}` : where };
 	});
 
 	function search(e: SubmitEvent) {

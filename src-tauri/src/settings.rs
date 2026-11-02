@@ -5,8 +5,8 @@
 //! `.gitignore` lists, so none of it is ever pushed to GitHub:
 //!
 //! ```text
-//! .ledger/settings.json     the repository, the branch, the screenshot hotkey
-//! .ledger/.env              the GitHub access token (the one secret)
+//! .ledger/settings.json     the repository, the branch, the screenshot hotkey, whether sync encrypts
+//! .ledger/.env              the GitHub access token and the vault's encryption key (the secrets, kept in a file)
 //! .ledger/sync-state.json   the sync's own bookkeeping
 //! .ledger/conflicts/        versions set aside when a sync resolved a conflict
 //! ```
@@ -79,11 +79,20 @@ pub struct GithubSettings {
     pub branch: String,
 }
 
+/// Whether what goes to GitHub is encrypted. The key itself is not here: it is a secret, so it sits in `.ledger/.env`
+/// with the access token (see `keystore.rs`).
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct EncryptionSettings {
+    pub enabled: bool,
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct VaultSettings {
     pub github: GithubSettings,
     pub screenshot_hotkey: Option<String>,
+    pub encryption: EncryptionSettings,
 }
 
 pub fn settings_path(root: &Path) -> PathBuf {
@@ -139,29 +148,32 @@ impl SyncEnv {
 
 pub fn read_env(root: &Path) -> SyncEnv {
     let github = read_settings(root).github;
-    let mut env = SyncEnv { repo: github.repo, branch: github.branch, token: String::new() };
-    if let Ok(text) = fs::read_to_string(secrets_path(root)) {
-        for line in text.lines() {
-            if let Some((KEY_TOKEN, value)) = parse_line(line) {
-                env.token = value;
-            }
-        }
-    }
-    env
+    SyncEnv { repo: github.repo, branch: github.branch, token: read_secret(root, KEY_TOKEN).unwrap_or_default() }
 }
 
 /// The repository and branch go to `settings.json`, the token to `.env`; other lines in `.env` stay as they were.
 pub fn write_env(root: &Path, env: &SyncEnv) -> Result<()> {
     update_settings(root, |s| s.github = GithubSettings { repo: env.repo.clone(), branch: env.branch.clone() })?;
+    write_secret(root, KEY_TOKEN, &env.token)
+}
 
+/// One value from `.ledger/.env`; the last line that sets it wins. `None` when the file or the line isn't there.
+pub fn read_secret(root: &Path, name: &str) -> Option<String> {
+    let text = fs::read_to_string(secrets_path(root)).ok()?;
+    text.lines().filter_map(parse_line).filter(|(key, _)| *key == name).map(|(_, value)| value).last()
+}
+
+/// Sets one line in `.ledger/.env` and leaves every other line as it was. The file stays on this machine: it is
+/// gitignored and never synced, and where the system allows it only its owner can read it.
+pub fn write_secret(root: &Path, name: &str, value: &str) -> Result<()> {
     let file = secrets_path(root);
     let existing = fs::read_to_string(&file).unwrap_or_default();
     let mut lines: Vec<String> = existing.lines().map(str::to_string).collect();
     if lines.is_empty() {
-        lines.push("# Ledger's GitHub access token. This file stays on this machine: it is gitignored and never synced.".into());
+        lines.push("# Ledger's secrets: the GitHub access token and the vault's encryption key. This file stays on this machine: it is gitignored and never synced.".into());
     }
-    let line = format!("{KEY_TOKEN}={}", quote(&env.token));
-    match lines.iter().position(|l| parse_line(l).is_some_and(|(k, _)| k == KEY_TOKEN)) {
+    let line = format!("{name}={}", quote(value));
+    match lines.iter().position(|l| parse_line(l).is_some_and(|(k, _)| k == name)) {
         Some(i) => lines[i] = line,
         None => lines.push(line),
     }
@@ -171,7 +183,7 @@ pub fn write_env(root: &Path, env: &SyncEnv) -> Result<()> {
     }
     fs::write(&file, lines.join("\n") + "\n").map_err(|e| Error::io(&file, e))?;
     restrict_to_owner(&file);
-    Ok(())
+    ensure_gitignore(root)
 }
 
 fn parse_line(line: &str) -> Option<(&str, String)> {

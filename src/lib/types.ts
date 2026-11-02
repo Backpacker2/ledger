@@ -250,6 +250,8 @@ export interface SyncStatus {
 	state: 'disabled' | 'idle' | 'syncing' | 'error';
 	/** Changes made here that have not been pushed yet. */
 	pending: boolean;
+	/** Whether syncs encrypt what they upload (the setting as it stood when the last sync started). */
+	encrypted: boolean;
 	lastSyncAt: string | null;
 	lastError: string | null;
 	summary: string | null;
@@ -262,6 +264,19 @@ export interface SyncSettings {
 	hasToken: boolean;
 	tokenHint: string;
 	configured: boolean;
+}
+
+export interface EncryptionStatus {
+	/** Whether what is synced is encrypted. */
+	enabled: boolean;
+	/** The key lives in the vault's .ledger/.env; the screen only learns whether it is there. */
+	hasKey: boolean;
+	/** The key's one-byte label as two hex digits, to tell keys apart between machines. */
+	keyId: string | null;
+	/** Why the key can't be read, if it can't (a damaged line in .ledger/.env, an unreadable file). */
+	problem: string | null;
+	/** This vault already synced the configured repository and branch without encryption: that branch can't become an encrypted one. */
+	needsFreshTarget: boolean;
 }
 
 export interface ScreenshotSettings {
@@ -283,6 +298,7 @@ export interface Settings {
 	sync: SyncSettings;
 	status: SyncStatus;
 	screenshot: ScreenshotSettings;
+	encryption: EncryptionStatus;
 }
 
 /** A dragged rectangle, in the capture's own pixels. */

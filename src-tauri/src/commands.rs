@@ -3,13 +3,16 @@
 //! Argument names are snake_case here and camelCase from the frontend.
 
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
+use zeroize::Zeroizing;
 
 use crate::error::{Error, Result};
 use crate::github::GithubRemote;
+use crate::keystore::{self, EncryptionStatus, KeyStore};
 use crate::models::*;
 use crate::posts::AddOptions;
 use crate::screenshot::{self, Region, ScreenshotSettings};
@@ -415,14 +418,16 @@ pub struct SettingsView {
     pub sync: SyncSettings,
     pub status: SyncStatus,
     pub screenshot: ScreenshotSettings,
+    /// Whether sync encrypts, and whether this machine has the key. Never the key.
+    pub encryption: EncryptionStatus,
 }
 
 fn view(app: &App) -> SettingsView {
-    let (root, locked, env) = {
+    let (root, locked, env, keys) = {
         let core = app.lock();
         let root = core.vault.root().to_path_buf();
         let env = settings::read_env(&root);
-        (root, core.vault_from_env, env)
+        (root, core.vault_from_env, env, core.keys.clone())
     };
     let token_hint = if env.token.chars().count() >= 8 {
         format!("…{}", env.token.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect::<String>())
@@ -444,6 +449,7 @@ fn view(app: &App) -> SettingsView {
         },
         status: app.syncer.status(),
         screenshot: app.screenshots.settings(&root),
+        encryption: keystore::status(&root, &*keys),
     }
 }
 
@@ -536,6 +542,59 @@ pub fn sync_now(app: State<App>) -> Result<()> {
     }
     app.syncer.now();
     Ok(())
+}
+
+// ---- encrypting what goes to GitHub -----------------------------------------------------------------
+
+/// Where the vault is and what holds its key, taken out of the core so the key store is asked without the vault
+/// lock held.
+fn key_context(app: &App) -> (PathBuf, Arc<dyn KeyStore>) {
+    let core = app.lock();
+    (core.vault.root().to_path_buf(), core.keys.clone())
+}
+
+#[tauri::command]
+pub fn encryption_status(app: State<App>) -> EncryptionStatus {
+    let (root, keys) = key_context(&app);
+    keystore::status(&root, &*keys)
+}
+
+/// Turns encryption of what is synced on or off, and syncs so that it takes effect. It can't be turned on until
+/// there is a key.
+#[tauri::command]
+pub fn set_encryption_enabled(app: State<App>, enabled: bool) -> Result<SettingsView> {
+    let (root, keys) = key_context(&app);
+    keystore::set_enabled(&root, &*keys, enabled)?;
+    if app.lock().sync.is_some() {
+        app.syncer.now();
+    }
+    Ok(view(&app))
+}
+
+/// Makes a new random key and keeps it in the vault's `.ledger/.env`. With a key already on this machine that
+/// takes `replace`.
+#[tauri::command]
+pub fn generate_encryption_key(app: State<App>, replace: bool) -> Result<SettingsView> {
+    let (root, keys) = key_context(&app);
+    keystore::generate(&root, &*keys, replace)?;
+    Ok(view(&app))
+}
+
+/// Keeps a key made on another machine: its recovery string, or the bare key as hex or base64.
+#[tauri::command]
+pub fn import_encryption_key(app: State<App>, key: String, replace: bool) -> Result<SettingsView> {
+    let key = Zeroizing::new(key);
+    let (root, keys) = key_context(&app);
+    keystore::import(&root, &*keys, &key, replace)?;
+    Ok(view(&app))
+}
+
+/// The recovery string for the key: the one command that hands the key out, and only when asked for.
+#[tauri::command]
+pub fn export_recovery_key(app: State<App>) -> Result<String> {
+    let (root, keys) = key_context(&app);
+    let recovery = keystore::export(&root, &*keys)?;
+    Ok(String::clone(&recovery))
 }
 
 /// Moves the app to the vault in `path`. With `copy`, an empty destination first receives the current vault.

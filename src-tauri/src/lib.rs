@@ -1,12 +1,15 @@
 mod board;
 mod commands;
+mod crypto;
 mod db;
 mod deliverables;
+mod encrypted_remote;
 mod error;
 mod feedback;
 mod frontmatter;
 mod github;
 mod ids;
+mod keystore;
 mod markdown;
 mod models;
 mod posts;
@@ -26,6 +29,8 @@ mod vault;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_crypto;
 #[cfg(test)]
 mod tests_screenshot;
 #[cfg(test)]
@@ -139,6 +144,11 @@ pub fn run() {
             commands::disconnect_sync,
             commands::test_sync,
             commands::sync_now,
+            commands::encryption_status,
+            commands::set_encryption_enabled,
+            commands::generate_encryption_key,
+            commands::import_encryption_key,
+            commands::export_recovery_key,
             commands::set_vault_path,
             commands::reload_vault,
             commands::check_vault_changes,
