@@ -85,19 +85,19 @@ The macOS and Linux code has been type-checked but not run; the Windows flow is 
 
 ## Running it
 
-You need [Node.js](https://nodejs.org), a Rust toolchain and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your platform (on Windows: the MSVC build tools and WebView2).
+You need [Node.js](https://nodejs.org) with [pnpm](https://pnpm.io) (`corepack enable` activates the version pinned in `package.json`), a Rust toolchain and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your platform (on Windows: the MSVC build tools and WebView2).
 
 ```bash
-npm install
-npm run tauri dev      # the app, with hot reload
-npm run tauri build    # an installer / bundle
+pnpm install
+pnpm run tauri dev     # the app, with hot reload
+pnpm run tauri build   # an installer / bundle
 ```
 
 Checks:
 
 ```bash
-npm test               # Rust: stores, vault round-trips, and the sync algorithm against a fake GitHub
-npm run check          # Svelte + TypeScript
+pnpm test              # Rust: stores, vault round-trips, and the sync algorithm against a fake GitHub
+pnpm run check         # Svelte + TypeScript
 ```
 
 Environment variables, mostly for development: `LEDGER_VAULT` fixes the vault location (and locks it in Settings); `LEDGER_CONFIG_DIR` moves the per-machine settings (the vault location); `LEDGER_GITHUB_API` points the sync at another API base (GitHub Enterprise, or a mock).

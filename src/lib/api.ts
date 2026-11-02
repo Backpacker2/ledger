@@ -28,7 +28,7 @@ import type {
 /** Commands reject with a plain message; surface it as an `Error` so callers can `catch (e)` uniformly. */
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
 	if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
-		throw new Error('Ledger needs its desktop shell — start it with `npm run tauri dev`.');
+		throw new Error('Ledger needs its desktop shell — start it with `pnpm run tauri dev`.');
 	}
 	try {
 		return await invoke<T>(command, args);
