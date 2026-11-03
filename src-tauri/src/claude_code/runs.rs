@@ -294,7 +294,7 @@ impl Runs {
 
     /// Starts a run in the background. Fails, without starting anything, if Claude Code can't be found, if this prompt
     /// is already running, or if the limit on runs at once is reached.
-    pub fn start(&self, request: RunRequest, ctx: RunContext, search: &Search) -> Result<RunView> {
+    pub fn start(&self, mut request: RunRequest, ctx: RunContext, search: &Search) -> Result<RunView> {
         let program = cli::resolve(&ctx.settings.cli_path, search)?;
         let _ = settings::ensure_gitignore(&ctx.root);
         let guard = if ctx.settings.confine { Some(write_guard(&ctx)?) } else { None };
@@ -310,6 +310,7 @@ impl Runs {
         let baseline = Baseline::capture(&deliverables::deliverables_dir(&ctx.root, &request.project));
 
         let run = Arc::new(Run::new(&request));
+        request.run_id = run.id.clone();
         {
             let mut runs = lock(&self.inner.runs);
             if runs.iter().any(|r| r.is_running() && r.is_for(&request)) {

@@ -11,6 +11,7 @@
 //!                                    /feedback/<id>.md    its feedback (on a deliverable)
 //!                                    /uploads/<id>.md     a manifest: when, where the file is, a description
 //!                                    /runs/<id>.md        a run of a prompt with Claude Code: how it went, what it did
+//! projects/<project>/versions/<id>.md            how a published version came to be: who made it, its thread, its AI-use label
 //! projects/<project>/userstories/<id>.md         a user story
 //! projects/<project>/tasks/<id>.md               a task on the board
 //! projects/<project>/templates/<id>.md           the project's own templates
@@ -40,7 +41,7 @@ use serde_yaml_ng::{Mapping, Value};
 use crate::db::{self, query_all};
 use crate::error::{Error, Result};
 use crate::frontmatter::{self, MetaExt};
-use crate::{board, deliverables, ids, projects, settings};
+use crate::{board, deliverables, ids, projects, provenance, settings};
 
 // ---- layout -----------------------------------------------------------------------------------------
 
@@ -58,6 +59,10 @@ fn thread_dir(project: &str, thread: &str) -> String {
 
 fn entity_file(project: &str, thread: &str, folder: &str, id: &str) -> String {
     format!("{}/{folder}/{id}.md", thread_dir(project, thread))
+}
+
+fn version_file(project: &str, id: &str) -> String {
+    format!("projects/{project}/versions/{id}.md")
 }
 
 fn story_file(project: &str, id: &str) -> String {
@@ -265,6 +270,7 @@ pub fn export(conn: &Connection) -> Result<BTreeMap<String, String>> {
     export_templates(conn, &mut files)?;
     export_stories_and_tasks(conn, &mut files)?;
     export_deliverables(conn, &mut files)?;
+    export_version_records(conn, &mut files)?;
     Ok(files)
 }
 
@@ -318,13 +324,13 @@ fn export_threads(conn: &Connection, files: &mut BTreeMap<String, String>) -> Re
         files.insert(format!("{}/thread.md", thread_dir(&project, &slug)), frontmatter::render(&meta, &description));
     }
 
-    type PostRow = (String, String, String, Option<String>, bool, bool, Option<String>, Option<String>, String, String, String);
-    for (id, project, thread, parent, guiding, published, path, version, created_at, updated_at, body) in query_all::<PostRow, _>(
+    type PostRow = (String, String, String, Option<String>, bool, bool, Option<String>, Option<String>, Option<String>, String, String, String);
+    for (id, project, thread, parent, guiding, published, path, version, prompt, created_at, updated_at, body) in query_all::<PostRow, _>(
         conn,
         "SELECT id, project_slug, thread_slug, parent_id, guiding_question, version_published, deliverable_path,
-                deliverable_version, created_at, updated_at, body FROM posts",
+                deliverable_version, prompt_id, created_at, updated_at, body FROM posts",
         [],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?)),
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?)),
     )? {
         let mut meta = Mapping::new();
         frontmatter::set(&mut meta, "id", id.clone());
@@ -333,6 +339,7 @@ fn export_threads(conn: &Connection, files: &mut BTreeMap<String, String>) -> Re
         frontmatter::set_flag(&mut meta, "versionPublished", published);
         frontmatter::set_opt(&mut meta, "deliverable", path.as_deref());
         frontmatter::set_opt(&mut meta, "deliverableVersion", version.as_deref());
+        frontmatter::set_opt(&mut meta, "prompt", prompt.as_deref());
         frontmatter::set(&mut meta, "createdAt", created_at);
         frontmatter::set(&mut meta, "updatedAt", updated_at);
         files.insert(entity_file(&project, &thread, "posts", &id), frontmatter::render(&meta, &body));
@@ -509,6 +516,32 @@ fn export_deliverables(conn: &Connection, files: &mut BTreeMap<String, String>) 
     Ok(())
 }
 
+/// How each published version came to be, one file per version.
+fn export_version_records(conn: &Connection, files: &mut BTreeMap<String, String>) -> Result<()> {
+    type RecordRow = (String, String, String, String, Option<String>, Option<String>, Option<String>, String, Option<String>, Option<String>, String, String);
+    for (id, project, deliverable, version, thread, prompt, run, author, mmm, sha256, note, created_at) in query_all::<RecordRow, _>(
+        conn,
+        "SELECT id, project_slug, deliverable_path, version, thread_slug, prompt_id, run_id, author, mmm, sha256, note, created_at
+         FROM version_records",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?, r.get(11)?)),
+    )? {
+        let mut meta = Mapping::new();
+        frontmatter::set(&mut meta, "id", id.clone());
+        frontmatter::set(&mut meta, "deliverable", deliverable);
+        frontmatter::set(&mut meta, "version", version);
+        frontmatter::set_opt(&mut meta, "thread", thread.as_deref());
+        frontmatter::set_opt(&mut meta, "prompt", prompt.as_deref());
+        frontmatter::set_opt(&mut meta, "run", run.as_deref());
+        frontmatter::set_opt(&mut meta, "by", Some(&author));
+        frontmatter::set_opt(&mut meta, "mmm", mmm.as_deref());
+        frontmatter::set_opt(&mut meta, "sha256", sha256.as_deref());
+        frontmatter::set(&mut meta, "createdAt", created_at);
+        files.insert(version_file(&project, &id), frontmatter::render(&meta, &note));
+    }
+    Ok(())
+}
+
 // ---- import: files → database -----------------------------------------------------------------------
 
 struct Source<'a> {
@@ -571,6 +604,7 @@ fn import(conn: &Connection, root: &Path, listing: &BTreeMap<String, Fingerprint
         import_templates(&tx, &source, &project)?;
         let threads = import_threads(&tx, &source, &project)?;
         import_deliverables(&tx, &source, &project)?;
+        import_version_records(&tx, &source, &project)?;
         import_stories(&tx, &source, &project, &threads)?;
         import_tasks(&tx, &source, &project, &threads)?;
     }
@@ -663,7 +697,7 @@ fn import_threads(conn: &Connection, source: &Source, project: &str) -> Result<H
 
     // Posts, prompts, feedback and uploads, each in time order: insertion order is the tie-break for things made
     // in the same instant.
-    type Post = (String, String, Option<String>, bool, bool, Option<String>, Option<String>, String, String, String);
+    type Post = (String, String, Option<String>, bool, bool, Option<String>, Option<String>, Option<String>, String, String, String);
     let mut posts: Vec<Post> = vec![];
     for slug in &slugs {
         for stem in source.stems(&format!("{}/posts", thread_dir(project, slug))) {
@@ -681,19 +715,20 @@ fn import_threads(conn: &Connection, source: &Source, project: &str) -> Result<H
                 meta.flag("versionPublished"),
                 meta.text("deliverable"),
                 meta.text("deliverableVersion"),
+                meta.text("prompt"),
                 created_at.clone(),
                 meta.text("updatedAt").unwrap_or(created_at),
                 body,
             ));
         }
     }
-    posts.sort_by(|a, b| (&a.7, &a.0).cmp(&(&b.7, &b.0)));
-    for (id, thread, parent, guiding, published, path, version, created_at, updated_at, body) in posts {
+    posts.sort_by(|a, b| (&a.8, &a.0).cmp(&(&b.8, &b.0)));
+    for (id, thread, parent, guiding, published, path, version, prompt, created_at, updated_at, body) in posts {
         conn.execute(
             "INSERT OR IGNORE INTO posts (id, project_slug, thread_slug, parent_id, guiding_question, version_published,
-                                          deliverable_path, deliverable_version, created_at, updated_at, body)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            params![id, project, thread, parent, guiding, published, path, version, created_at, updated_at, body],
+                                          deliverable_path, deliverable_version, prompt_id, created_at, updated_at, body)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![id, project, thread, parent, guiding, published, path, version, prompt, created_at, updated_at, body],
         )?;
     }
 
@@ -836,6 +871,47 @@ fn import_deliverables(conn: &Connection, source: &Source, project: &str) -> Res
         let body = if deliverables::is_markdown(path) { source.read(rel) } else { None };
         let modified = ids::format_millis((nanos / 1_000_000) as i64);
         deliverables::upsert(conn, project, path, *size as i64, &modified, body.as_deref())?;
+    }
+    Ok(())
+}
+
+/// The record of each published version. One for a version that is not there (any more) is left alone in the vault but
+/// not loaded; of two for the same version the older wins.
+fn import_version_records(conn: &Connection, source: &Source, project: &str) -> Result<()> {
+    let mut records = vec![];
+    for stem in source.stems(&format!("projects/{project}/versions")) {
+        let rel = version_file(project, &stem);
+        let Some((meta, note)) = source.parsed(&rel) else { continue };
+        let (Some(deliverable), Some(version)) = (meta.text("deliverable"), meta.text("version")) else { continue };
+        let Some((major, minor)) = deliverables::parse_version(&version) else { continue };
+        let version = format!("{major}.{minor}");
+        if !deliverables::exists(conn, project, &deliverables::snapshot_path(&deliverable, &version))? {
+            continue;
+        }
+        let created_at = meta.text("createdAt").unwrap_or_else(|| source.stamp(&rel));
+        records.push((meta.text("id").unwrap_or(stem), deliverable, version, meta, note, created_at));
+    }
+    records.sort_by(|a, b| (&a.5, &a.0).cmp(&(&b.5, &b.0)));
+    for (id, deliverable, version, meta, note, created_at) in records {
+        conn.execute(
+            "INSERT OR IGNORE INTO version_records
+                (id, project_slug, deliverable_path, version, thread_slug, prompt_id, run_id, author, mmm, sha256, note, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                id,
+                project,
+                deliverable,
+                version,
+                meta.text("thread"),
+                meta.text("prompt"),
+                meta.text("run"),
+                provenance::author_of(&meta.text("by").unwrap_or_default()),
+                meta.text("mmm").and_then(|m| provenance::level(&m).map(str::to_string)),
+                meta.text("sha256"),
+                note,
+                created_at
+            ],
+        )?;
     }
     Ok(())
 }

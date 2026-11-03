@@ -41,6 +41,13 @@
 	--shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.45);
 	--shadow-toast: 0 8px 24px rgba(0, 0, 0, 0.3);
 	--shadow-drawer: 0 0 40px rgba(0, 0, 0, 0.5);
+
+	/* The AI-use (MMM) levels, from the most AI to the least: only the dot of a label is coloured. */
+	--mmm-lazy-prompter: var(--red);
+	--mmm-piggybacker: var(--amber);
+	--mmm-cyborg: var(--brand-indigo);
+	--mmm-handyman: #4ea8ff;
+	--mmm-man-made: var(--green);
 }
 
 /* ---------- themes ----------
@@ -102,7 +109,7 @@
 html, body { height: 100%; margin: 0; }
 /* The window never scrolls (or bounces) as a whole: only the panes inside it do, and they don't hand their scrolling on. */
 html, body { overflow: hidden; overscroll-behavior: none; }
-.sidebar, .page, .thread, .board, .col-cards, .modal-body, .link-grid { overscroll-behavior: contain; }
+.sidebar, .page, .thread, .board, .col-cards, .modal-body, .link-grid, .side-window { overscroll-behavior: contain; }
 body {
 	display: flex;
 	background: var(--bg);
@@ -530,4 +537,54 @@ mark { background: var(--highlight); color: inherit; border-radius: 3px; padding
 
 @media (max-width: 760px) {
 	.cols-2 { grid-template-columns: 1fr; }
+}
+
+/* ---------- a deliverable: the page and the "Produced by" window next to it ---------- */
+.doc-body { flex: 1; min-height: 0; display: flex; }
+.doc-body > .page { min-width: 0; }
+.side-window { width: 380px; flex-shrink: 0; border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; overscroll-behavior: contain; padding: 16px 18px 28px; display: flex; flex-direction: column; gap: 14px; }
+.side-scrim { display: none; }
+.rule { border: 0; border-top: 1px solid var(--line); margin: 2px 0; width: 100%; }
+.note-from { font-size: 12.5px; margin-top: 2px; }
+
+.pv-head { display: flex; justify-content: space-between; align-items: center; }
+.pv-head h2 { font-size: 16px; }
+.pv-summary { display: flex; flex-direction: column; gap: 6px; padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.pv-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pv-counts, .pv-meta { font-size: 12px; color: var(--muted); }
+.pv-hint { font-size: 11.5px; color: var(--faint); }
+.pv-warn { font-size: 12px; color: var(--amber); }
+.pv-draft { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px dashed var(--amber); border-radius: 10px; background: var(--amber-soft); font-size: 13px; }
+.pv-group { display: flex; flex-direction: column; gap: 8px; }
+.pv-thread { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.pv-thread a, .pv-thread .name { font-weight: 700; color: var(--ink); text-decoration: none; min-width: 0; overflow-wrap: anywhere; }
+.pv-thread a:hover { color: var(--accent); }
+.pv-entries { display: flex; flex-direction: column; gap: 8px; padding-left: 10px; border-left: 2px solid var(--line); }
+.pv-row { display: flex; gap: 6px; align-items: baseline; font-size: 12.5px; color: var(--muted); }
+.pv-row .glyph { color: var(--faint); width: 14px; display: inline-flex; align-self: center; justify-content: center; flex-shrink: 0; }
+.pv-row a { color: var(--muted); text-decoration: none; overflow-wrap: anywhere; }
+.pv-row a:hover { color: var(--accent); }
+.pv-version { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; display: flex; flex-direction: column; gap: 6px; }
+.pv-version.current { border-color: var(--accent); }
+.pv-by { font-size: 12px; font-weight: 600; }
+.pv-by.ai { color: var(--accent); }
+.pv-by.unknown { color: var(--faint); font-weight: 500; }
+.pv-when, .pv-size { font-size: 11.5px; color: var(--faint); }
+.pv-note { margin: 0; font-size: 12.5px; white-space: pre-wrap; }
+.pv-meta a { color: var(--muted); }
+.pv-details summary { cursor: pointer; font-size: 11.5px; color: var(--faint); }
+.pv-details .kv { margin: 8px 0; grid-template-columns: 72px 1fr; font-size: 12px; }
+.pv-details .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; }
+.pv-edit { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+select.pv-level { padding: 2px 6px; font-size: 11.5px; border-radius: 8px; width: 11em; max-width: 100%; }
+
+/* The AI-use (MMM) labels: a dot for the level, the text stays in the theme's ink. */
+.mmm { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--card-2); color: var(--ink); white-space: nowrap; }
+.mmm .mmm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex-shrink: 0; }
+.mmm .mmm-tag { font-weight: 400; color: var(--muted); }
+
+/* Where the window is too narrow to hold it beside the page, it is a drawer over it. */
+@media (max-width: 1099px) {
+	.side-window { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(420px, 92vw); box-shadow: var(--shadow-drawer); }
+	.side-scrim.open { display: block; position: fixed; inset: 0; z-index: 35; background: var(--scrim-faint); }
 }

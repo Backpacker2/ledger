@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.0 (2026-11-03)
+
+### Features
+
+- **deliverables:** quote the changelog in the version published note ([0a4fa99](https://github.com/openledger-nl/ledger/commit/0a4fa998de2f8df69bec8edf39db8a234618b669))
+- **settings:** one global order for posts, threads, feedback and versions ([6dd7e32](https://github.com/openledger-nl/ledger/commit/6dd7e32bbd735555abd2e12524ec1bed90b93fe4))
+- **claude:** add a setting to run a prompt as soon as it is created ([b697886](https://github.com/openledger-nl/ledger/commit/b697886d6719ab2a939bdee25f8594b43145d1e3))
+- **deliverables:** show how a deliverable was produced in a window beside it ([e7fa06a](https://github.com/openledger-nl/ledger/commit/e7fa06a7e6805623f90d34989bc3bd6934efe905))
+- **deliverables:** note the prompt behind a version and show labels in the list ([2cb550a](https://github.com/openledger-nl/ledger/commit/2cb550a4b63292bbdcc9dcdb1ac4d34bef481669))
+- **deliverables:** record how each published version came to be ([123eff6](https://github.com/openledger-nl/ledger/commit/123eff6776a3b3d6a4d3202a924133815c6b37b3))
+
+### Fixes
+
+- **deliverables:** do not guess who made kept edits, and keep a run with its own prompt ([37ce47a](https://github.com/openledger-nl/ledger/commit/37ce47a18c32cbd06a18b4111ddef6fae332fdb4))
+
+### Other changes
+
+- **deliverables:** use Lucide icons and colour tokens in the produced-by window ([6e983ec](https://github.com/openledger-nl/ledger/commit/6e983ecf38fec764c7d3b9549654778138904905))
+
 ## 0.3.0 (2026-11-03)
 
 ### Features

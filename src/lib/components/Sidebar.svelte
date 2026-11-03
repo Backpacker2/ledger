@@ -119,7 +119,7 @@
 			</div>
 			{#if unfolded}
 				<div class="folder-children">
-					{#each orderThreads(p.threads, listOrder.explorer) as t (t.slug)}
+					{#each orderThreads(p.threads, listOrder.order) as t (t.slug)}
 						<a class="tree-item" class:active={path === threadUrl(p.slug, t.slug)} href={threadUrl(p.slug, t.slug)}>
 							<span class="dot"></span>
 							<span class="name">{t.title}</span>

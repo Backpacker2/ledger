@@ -16,6 +16,7 @@ mod models;
 mod posts;
 mod projects;
 mod prompts;
+mod provenance;
 mod screenshot;
 mod search;
 mod settings;
@@ -45,6 +46,8 @@ mod tests_claude_code;
 mod tests_trello;
 #[cfg(test)]
 mod tests_crypto;
+#[cfg(test)]
+mod tests_provenance;
 #[cfg(test)]
 mod tests_screenshot;
 #[cfg(test)]
@@ -145,6 +148,8 @@ pub fn run() {
             commands::create_deliverable,
             commands::save_deliverable,
             commands::publish_deliverable,
+            commands::get_provenance,
+            commands::update_version_record,
             commands::delete_deliverable,
             commands::list_templates,
             commands::project_templates,

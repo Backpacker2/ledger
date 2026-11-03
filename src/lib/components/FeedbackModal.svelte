@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
 	import { snapshotPath } from '$lib/actions';
-	import { versionsNewestFirst } from '$lib/order';
+	import { orderVersions } from '$lib/order';
+	import { listOrder } from '$lib/order.svelte';
 	import { attempt, refresh } from '$lib/ui.svelte';
 	import type { DeliverableSummary } from '$lib/types';
 	import MarkdownEditor from './MarkdownEditor.svelte';
@@ -23,7 +24,7 @@
 	const options = $derived(
 		all.flatMap((d) => [
 			...(d.exists ? [{ value: d.path, label: d.path }] : []),
-			...versionsNewestFirst(d.versions).map((v) => ({ value: snapshotPath(d.path, v), label: `${d.path} · version ${v}` }))
+			...orderVersions(d.versions, listOrder.order).map((v) => ({ value: snapshotPath(d.path, v), label: `${d.path} · version ${v}` }))
 		])
 	);
 

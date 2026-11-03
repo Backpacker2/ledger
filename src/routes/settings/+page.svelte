@@ -308,6 +308,7 @@ projects/&lt;project&gt;/threads/&lt;thread&gt;/thread.md      a thread, with po
 projects/&lt;project&gt;/userstories/&lt;id&gt;.md          a user story
 projects/&lt;project&gt;/tasks/&lt;id&gt;.md                a task on the board
 projects/&lt;project&gt;/deliverables/                  what prompts produce (name@v1.0.md = published)
+projects/&lt;project&gt;/versions/&lt;id&gt;.md              how a published version came to be
 projects/&lt;project&gt;/attachments/                   uploaded files and screenshots
 projects/&lt;project&gt;/templates/&lt;id&gt;.md            templates for this project
 templates/&lt;id&gt;.md                               templates for every project

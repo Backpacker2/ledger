@@ -27,6 +27,8 @@ pub struct RunRequest {
     pub thread: String,
     pub prompt_id: String,
     pub prompt_title: String,
+    /// The run this request is for, once it has started; empty before.
+    pub run_id: String,
     /// The project's folder: where the program runs.
     pub cwd: PathBuf,
     /// The text sent on standard input.
@@ -69,6 +71,7 @@ pub fn prepare(conn: &Connection, root: &Path, project: &str, thread: &str, prom
         thread: thread.to_string(),
         prompt_id: prompt.id.clone(),
         prompt_title: prompt.title.clone(),
+        run_id: String::new(),
         cwd,
         text,
     })

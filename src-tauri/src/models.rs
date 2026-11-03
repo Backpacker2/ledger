@@ -61,7 +61,7 @@ pub struct ProjectView {
 
 /// `guiding_question`: seeded from a template's guiding questions.
 /// `version_published`: an automatic note announcing a published deliverable version; `deliverable_path` and
-/// `deliverable_version` point at the snapshot.
+/// `deliverable_version` point at the snapshot, and `prompt_id` at the prompt that caused it, when one did.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PostView {
@@ -71,6 +71,10 @@ pub struct PostView {
     pub version_published: bool,
     pub deliverable_path: Option<String>,
     pub deliverable_version: Option<String>,
+    /// The prompt that caused the version, and its name and thread while it still exists.
+    pub prompt_id: Option<String>,
+    pub prompt_title: Option<String>,
+    pub prompt_thread: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub body: String,
@@ -168,6 +172,8 @@ pub struct DeliverableSummary {
     pub versions: Vec<String>,
     pub prompt_count: i64,
     pub open_feedback: i64,
+    /// The AI-use (MMM) label of the newest version that has one.
+    pub mmm: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -321,6 +327,30 @@ pub enum Bump {
     #[default]
     Minor,
     Major,
+}
+
+/// What the person says about a version when publishing it. `thread`: absent picks the default one, an empty string
+/// files the version under no thread. A `prompt` or `run` only counts when `ai` is set.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PublishChoices {
+    pub thread: Option<String>,
+    /// The change was made with generative AI (outside the runs Ledger records itself).
+    pub ai: bool,
+    /// One of the five MMM levels.
+    pub mmm: Option<String>,
+    pub prompt: Option<String>,
+    pub run: Option<String>,
+    pub note: Option<String>,
+}
+
+/// Only the fields that are present change. `by` is "human" or "ai"; for `mmm`, an empty string removes the label.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct VersionUpdate {
+    pub by: Option<String>,
+    pub mmm: Option<String>,
+    pub note: Option<String>,
 }
 
 /// What the caller supplies when creating a story.

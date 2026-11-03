@@ -166,6 +166,32 @@ pub fn unlink_deliverable(conn: &Connection, project: &str, thread: &str, id: &s
     get(conn, project, thread, id)
 }
 
+/// What a prompt is called on screen: its title, or the start of what it asks when it has none.
+pub fn display_title(title: &str, body: &str) -> String {
+    let title = title.trim();
+    if !title.is_empty() {
+        return title.to_string();
+    }
+    let line = body.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("Untitled prompt");
+    let mut out: String = line.chars().take(60).collect();
+    if line.chars().count() > 60 {
+        out = format!("{}…", out.trim_end());
+    }
+    out
+}
+
+/// [`display_title`] of the prompt with this id, or `None` when it is gone.
+pub fn display_title_of(conn: &Connection, project: &str, id: &str) -> Result<Option<String>> {
+    Ok(locate(conn, project, id)?.map(|(_, title)| title))
+}
+
+/// The thread and the name of the prompt with this id, or `None` when it is gone.
+pub fn locate(conn: &Connection, project: &str, id: &str) -> Result<Option<(String, String)>> {
+    query_opt(conn, "SELECT thread_slug, title, body FROM prompts WHERE project_slug = ?1 AND id = ?2", [project, id], |r| {
+        Ok((r.get::<_, String>(0)?, display_title(&r.get::<_, String>(1)?, &r.get::<_, String>(2)?)))
+    })
+}
+
 /// The prompts that produced a deliverable (given by its live path), oldest first. A prompt counts when it is linked
 /// to the file or to one of its published versions: a run links the version it published.
 pub fn producing(conn: &Connection, project: &str, path: &str) -> Result<Vec<DeliverablePrompt>> {

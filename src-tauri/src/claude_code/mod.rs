@@ -114,6 +114,8 @@ pub struct ClaudeSettingsView {
     pub permission_mode: String,
     pub model: String,
     pub confine: bool,
+    /// A prompt that is created starts running at once.
+    pub auto_run: bool,
     /// The program that would be run, when it can be found.
     pub resolved_path: Option<String>,
     /// Why it can't be found, in words for the screen.
@@ -133,6 +135,7 @@ fn settings_view(root: &Path) -> ClaudeSettingsView {
         permission_mode: settings.permission_mode.as_str().to_string(),
         model: settings.model,
         confine: settings.confine,
+        auto_run: settings.auto_run,
         resolved_path,
         problem,
         settings_file: config::settings_path(root).display().to_string(),
@@ -146,9 +149,16 @@ pub fn claude_code_settings(app: State<App>) -> ClaudeSettingsView {
 }
 
 #[tauri::command]
-pub fn save_claude_code_settings(app: State<App>, cli_path: String, permission_mode: String, model: String, confine: bool) -> Result<ClaudeSettingsView> {
+pub fn save_claude_code_settings(
+    app: State<App>,
+    cli_path: String,
+    permission_mode: String,
+    model: String,
+    confine: bool,
+    auto_run: bool,
+) -> Result<ClaudeSettingsView> {
     let root = vault_root(&app);
-    config::save(&root, &ClaudeSettings::validated(&cli_path, &permission_mode, &model, confine)?)?;
+    config::save(&root, &ClaudeSettings::validated(&cli_path, &permission_mode, &model, confine, auto_run)?)?;
     Ok(settings_view(&root))
 }
 

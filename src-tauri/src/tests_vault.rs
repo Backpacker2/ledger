@@ -10,6 +10,7 @@ use tempfile::tempdir;
 use crate::frontmatter::{self, MetaExt};
 use crate::models::{Bump, Criterion, StoryDraft, TaskUpdate};
 use crate::posts::AddOptions;
+use crate::provenance::{self, Origin};
 use crate::settings::{self, SyncEnv};
 use crate::vault::{self, Vault};
 use crate::{board, db, deliverables, feedback, posts, projects, prompts, stories, templates, threads, uploads};
@@ -112,7 +113,7 @@ fn the_vault_has_the_agreed_folder_structure() {
     let thread = format!("{project}/threads/{t}");
 
     // The project: its definition, its reading guide, and the folders hanging off it.
-    assert_eq!(names(root, &project), ["README.md", "attachments", "deliverables", "project.md", "tasks", "templates", "threads", "userstories"]);
+    assert_eq!(names(root, &project), ["README.md", "attachments", "deliverables", "project.md", "tasks", "templates", "threads", "userstories", "versions"]);
     let definition = read(root, &format!("{project}/project.md"));
     assert!(definition.contains("name: Acme") && definition.contains("- id: backlog") && definition.contains("name: In review"), "{definition}");
     assert_eq!(read(root, &format!("{project}/README.md")), "# Acme\n\nRead the call notes first.\n");
@@ -150,6 +151,16 @@ fn the_vault_has_the_agreed_folder_structure() {
     // Deliverables are written verbatim; a published version is tagged @v1.0.
     assert_eq!(names(root, &format!("{project}/deliverables")), ["call-summary.md", "call-summary@v1.0.md"]);
     assert_eq!(read(root, &format!("{project}/deliverables/call-summary.md")), "# Call summary\n\nAna wants SSO.\n");
+
+    // How the published version came to be: one file for it, next to the project's other notes.
+    let record_files = names(root, &format!("{project}/versions"));
+    assert_eq!(record_files.len(), 1, "{record_files:?}");
+    let record = read(root, &format!("{project}/versions/{}", record_files[0]));
+    assert!(
+        record.contains("deliverable: call-summary.md") && record.contains("version: '1.0'") && record.contains("thread: alpha-the-first") && record.contains("by: human") && record.contains("sha256: "),
+        "{record}"
+    );
+    assert!(!record.contains("prompt:") && !record.contains("run:") && !record.contains("mmm:"), "what isn't known is left out: {record}");
 
     // Stories and tasks, and the two kinds of template.
     let story = read(root, &format!("{project}/userstories/MM01.md"));
@@ -613,4 +624,101 @@ fn moving_the_vault_copies_it_and_loads_the_new_place() {
     assert!(core.sync.is_none());
     assert_eq!(settings::load_config(config.path()).vault_path.unwrap(), fresh.display().to_string());
     assert!(db::query_all(&core.conn, "SELECT slug FROM projects", [], |r| r.get::<_, String>(0)).unwrap().is_empty());
+}
+
+// ---- how versions came to be ------------------------------------------------------------------------
+
+#[test]
+fn version_records_and_the_prompt_a_note_names_survive_a_reload() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    let (mut vault, conn) = open(root);
+    let p = projects::create(&conn, "Acme").unwrap().slug;
+    let t = threads::create(&conn, &p, "Call").unwrap().slug;
+    let prompt = prompts::create(&conn, &p, &t, "Summary", "Write it.", None).unwrap();
+    deliverables::create(&conn, &p, "Plan", "# Plan\n\ntext\n").unwrap();
+    let origin = Origin {
+        mmm: Some("piggybacker".into()),
+        note: "First draft by the run.".into(),
+        ..Origin::run(&t, &prompt.id, Some("run-x"))
+    };
+    deliverables::publish_run(&conn, root, &p, "plan.md", None, &origin).unwrap();
+    vault.persist(&conn).unwrap();
+
+    let record_name = &names(root, &format!("projects/{p}/versions"))[0];
+    let record = read(root, &format!("projects/{p}/versions/{record_name}"));
+    assert!(
+        record.contains("deliverable: plan.md")
+            && record.contains(&format!("prompt: {}", prompt.id))
+            && record.contains("run: run-x")
+            && record.contains("by: ai")
+            && record.contains("mmm: piggybacker")
+            && record.contains("thread: call")
+            && record.ends_with("First draft by the run.\n"),
+        "{record}"
+    );
+    let note_name = names(root, &format!("projects/{p}/threads/{t}/posts")).into_iter().find(|n| read(root, &format!("projects/{p}/threads/{t}/posts/{n}")).contains("versionPublished")).unwrap();
+    let note = read(root, &format!("projects/{p}/threads/{t}/posts/{note_name}"));
+    assert!(note.contains(&format!("prompt: {}", prompt.id)) && note.contains("deliverableVersion: '0.1'"), "{note}");
+
+    let (mut again, reloaded) = open(root);
+    assert_eq!(vault::export(&conn).unwrap(), vault::export(&reloaded).unwrap());
+    assert_eq!(again.persist(&reloaded).unwrap(), 0);
+    let known = provenance::resolve(&reloaded, &p, "plan.md").unwrap();
+    assert_eq!((known[0].author, known[0].run.as_deref(), known[0].mmm.as_deref(), known[0].note.as_str()), ("ai", Some("run-x"), Some("piggybacker"), "First draft by the run."));
+    assert_eq!(posts::list(&reloaded, &p, &t).unwrap().iter().find(|x| x.version_published).unwrap().prompt_title.as_deref(), Some("Summary"));
+}
+
+#[test]
+fn hand_written_version_records_are_read_leniently() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    let project = "projects/acme";
+    write(root, &format!("{project}/project.md"), "---\nname: Acme\n---\n");
+    write(root, &format!("{project}/threads/call/thread.md"), "---\ntitle: Call\n---\n");
+    for name in ["plan.md", "plan@v0.1.md", "plan@v0.2.md"] {
+        write(root, &format!("{project}/deliverables/{name}"), &format!("# {name}\n"));
+    }
+    // Upper case and strangers are read as what they mean; an unknown level or author is ignored, not an error.
+    write(root, &format!("{project}/versions/a.md"), "---\nid: a\ndeliverable: plan.md\nversion: '0.1'\nby: AI\nmmm: Cyborg\nthread: call\ncreatedAt: 2026-01-01T00:00:00.000Z\nsomething: else\n---\n\nA note.\n");
+    write(root, &format!("{project}/versions/b.md"), "---\nid: b\ndeliverable: plan.md\nversion: '0.2'\nby: robot\nmmm: nonsense\n---\n");
+    // Not loaded: a version that is not there, one that names no deliverable, a second record of the same version.
+    write(root, &format!("{project}/versions/c.md"), "---\nid: c\ndeliverable: plan.md\nversion: '0.9'\nby: human\n---\n");
+    write(root, &format!("{project}/versions/d.md"), "---\nid: d\nversion: '0.1'\nby: human\n---\n");
+    write(root, &format!("{project}/versions/e.md"), "---\nid: e\ndeliverable: plan.md\nversion: '0.1'\nby: human\ncreatedAt: 2026-06-01T00:00:00.000Z\n---\n");
+
+    let (_vault, conn) = open(root);
+    let known = provenance::resolve(&conn, "acme", "plan.md").unwrap();
+    assert_eq!(known.len(), 2);
+    assert_eq!((known[0].author, known[0].mmm.as_deref(), known[0].thread.as_deref(), known[0].note.as_str()), ("ai", Some("cyborg"), Some("call"), "A note."), "the older record of 0.1 wins");
+    assert_eq!((known[1].author, known[1].mmm.as_deref()), ("", None));
+    for stray in ["c", "d", "e"] {
+        assert!(root.join(format!("{project}/versions/{stray}.md")).is_file(), "{stray} is left where it was");
+    }
+}
+
+#[test]
+fn a_vault_from_before_version_records_loads_as_it_was_and_is_not_rewritten() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    let project = "projects/acme";
+    write(root, &format!("{project}/project.md"), "---\nname: Acme\n---\n");
+    write(root, &format!("{project}/threads/call/thread.md"), "---\ntitle: Call\n---\n");
+    write(root, &format!("{project}/deliverables/plan.md"), "# Plan\n\ntwo\n");
+    write(root, &format!("{project}/deliverables/plan@v0.1.md"), "# Plan\n\none\n");
+    write(
+        root,
+        &format!("{project}/threads/call/posts/n1.md"),
+        "---\nid: n1\nversionPublished: true\ndeliverable: plan.md\ndeliverableVersion: '0.1'\ncreatedAt: 2026-01-01T00:00:00.000Z\n---\n\nVersion 0.1 of **plan.md** was just published.\n",
+    );
+
+    let (_vault, conn) = open(root);
+    assert!(!root.join(format!("{project}/versions")).exists(), "nothing is written for versions that have no record");
+    let known = provenance::resolve(&conn, "acme", "plan.md").unwrap();
+    assert_eq!((known[0].author, known[0].thread.as_deref(), known[0].record.is_none()), ("", Some("call"), true));
+    assert_eq!(posts::list(&conn, "acme", "call").unwrap()[0].prompt_id, None);
+
+    let (mut again, reloaded) = open(root);
+    assert_eq!(again.persist(&reloaded).unwrap(), 0);
+    assert!(read(root, &format!("{project}/threads/call/posts/n1.md")).starts_with("---\nid: n1\nversionPublished: true"));
 }

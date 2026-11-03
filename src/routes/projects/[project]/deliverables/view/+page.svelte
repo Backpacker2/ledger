@@ -5,19 +5,23 @@
 	import FileImage from '$lib/components/FileImage.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
 	import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
+	import MmmBadge from '$lib/components/MmmBadge.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import ProvenancePanel from '$lib/components/ProvenancePanel.svelte';
 	import { api } from '$lib/api';
-	import { deliverableFile, deliverableUrl, formatSize, nextVersion, snapshotPath, threadUrl } from '$lib/actions';
+	import { deliverableFile, deliverableUrl, formatSize, nextVersion, snapshotPath } from '$lib/actions';
 	import { ago, dateTime } from '$lib/format';
-	import { orderFeedback, versionsNewestFirst } from '$lib/order';
+	import { MMM } from '$lib/mmm';
+	import { orderFeedback, orderVersions } from '$lib/order';
 	import { listOrder } from '$lib/order.svelte';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';
-	import type { Bump } from '$lib/types';
+	import type { Bump, MmmLevel } from '$lib/types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	const doc = $derived(data.deliverable);
+	const provenance = $derived(data.provenance);
 	const project = $derived(data.project.slug);
 	const threads = $derived(data.projects.find((p) => p.slug === project)?.threads ?? []);
 	const snapshot = $derived(doc.version !== null);
@@ -103,6 +107,25 @@
 		}
 	}
 
+	// ---- the "Produced by" side window -----------------------------------------------------------
+	// Open by default where the window is wide enough to hold it next to the page (below that it is a drawer over it).
+
+	let sideOpen = $state(true);
+	try {
+		const saved = localStorage.getItem('ledger-doc-provenance');
+		sideOpen = saved === 'open' || saved === 'closed' ? saved === 'open' : window.innerWidth >= 1100;
+	} catch {
+		// Storage unavailable: open.
+	}
+	function setSide(open: boolean) {
+		sideOpen = open;
+		try {
+			localStorage.setItem('ledger-doc-provenance', open ? 'open' : 'closed');
+		} catch {
+			// Not persisted.
+		}
+	}
+
 	// ---- actions -------------------------------------------------------------------------------
 
 	let publishing = $state(false);
@@ -111,11 +134,41 @@
 	let publishBusy = $state(false);
 	const preview = $derived({ minor: nextVersion(doc.versions, 'minor'), major: nextVersion(doc.versions, 'major') });
 
+	// What the person says about the change. Claude Code runs started here are recorded as they happen; the box is for AI
+	// used anywhere else, and starts ticked when a run is known to have changed this file without being published.
+	let thread = $state('');
+	let aiMade = $state(false);
+	let level = $state<MmmLevel | ''>('');
+	let promptId = $state('');
+	let changeNote = $state('');
+	const stopped = $derived(provenance.stoppedRun);
+	const manMadeConflict = $derived(level === 'man-made' && (aiMade || provenance.historyHasAi));
+	const suggestManMade = $derived(!aiMade && !provenance.historyHasAi && !level);
+
+	function startPublishing() {
+		bump = 'minor';
+		custom = '';
+		thread = provenance.defaultThread ?? '';
+		aiMade = stopped !== null;
+		level = provenance.suggestedLabel ?? '';
+		promptId = stopped?.promptId ?? '';
+		changeNote = '';
+		publishing = true;
+	}
+
 	async function publish() {
 		publishBusy = true;
 		await flush();
 		const published = await attempt(() =>
-			api.publishDeliverable(project, doc.path, bump === 'custom' ? 'minor' : bump, bump === 'custom' ? custom : null)
+			api.publishDeliverable(project, doc.path, bump === 'custom' ? 'minor' : bump, bump === 'custom' ? custom : null, {
+				thread,
+				ai: aiMade,
+				mmm: level || null,
+				prompt: aiMade ? promptId || null : null,
+				// The stopped run only goes on the record when the prompt is the one it ran.
+				run: aiMade && stopped && (!promptId || promptId === stopped.promptId) ? stopped.id : null,
+				note: changeNote.trim() || null
+			})
 		);
 		publishBusy = false;
 		if (!published) return;
@@ -175,7 +228,10 @@
 
 	const openCount = $derived(doc.feedback.filter((f) => f.status === 'open').length);
 	// Only how the list is read changes (see Settings); `doc.feedback` stays oldest first.
-	const feedbackList = $derived(orderFeedback(doc.feedback, listOrder.feedback));
+	// "Live" is the newest of all: first when newest reads first, last when oldest does.
+	const showLive = $derived(!!doc.basePath && (doc.exists || !snapshot));
+	const orderedVersions = $derived(orderVersions(doc.versions, listOrder.order));
+	const feedbackList = $derived(orderFeedback(doc.feedback, listOrder.order));
 </script>
 
 <svelte:head><title>{doc.name} · Ledger</title></svelte:head>
@@ -197,6 +253,7 @@
 					</span>
 				{/if}
 				<span>{formatSize(doc.size)}</span>
+				{#if provenance.summary.label}<MmmBadge level={provenance.summary.label.level} />{/if}
 				{#if doc.path.includes('/')}<span class="mono">{doc.path}</span>{/if}
 				{#if isMarkdown && !snapshot && doc.exists}
 					<span class="save-state">{saveState === 'saved' ? 'Saved' : saveState === 'saving' ? 'Saving…' : 'Unsaved changes'}</span>
@@ -204,6 +261,7 @@
 			</div>
 		</div>
 		<div class="header-actions">
+			<button class="btn ghost small" aria-pressed={sideOpen} onclick={() => setSide(!sideOpen)}>Produced by</button>
 			{#if isMarkdown}<button class="btn ghost small" onclick={copyMarkdown}>Copy markdown</button>{/if}
 			{#if doc.exists}
 				<button class="btn ghost small" onclick={() => open(false)}>Open</button>
@@ -211,7 +269,7 @@
 			{/if}
 			{#if !snapshot && doc.exists}
 				<button class="btn ghost small danger" onclick={remove}>Delete</button>
-				<button class="btn primary" onclick={() => (publishing = true)}>Publish version…</button>
+				<button class="btn primary" onclick={startPublishing}>Publish version…</button>
 			{/if}
 		</div>
 	</div>
@@ -219,21 +277,22 @@
 	<div class="subline" style="padding-bottom:12px">
 		<span>Versions:</span>
 		<div class="version-strip">
-			{#if doc.basePath}
-				{#if doc.exists || !snapshot}
-					<a class="vchip" class:on={!snapshot} href={deliverableUrl(project, doc.basePath)}>Live</a>
-				{/if}
-			{/if}
-			<!-- Live first, then the newest version; `doc.versions` itself stays oldest first, which "latest" relies on. -->
-			{#each versionsNewestFirst(doc.versions) as v (v)}
+			{#snippet liveChip()}
+				<a class="vchip" class:on={!snapshot} href={deliverableUrl(project, doc.basePath)}>Live</a>
+			{/snippet}
+			{#if showLive && listOrder.order === 'desc'}{@render liveChip()}{/if}
+			<!-- `doc.versions` itself stays oldest first, which "latest" relies on; only the chips follow the setting. -->
+			{#each orderedVersions as v (v)}
 				<a class="vchip" class:on={doc.version === v} href={deliverableUrl(project, snapshotPath(doc.basePath, v))}>v{v}</a>
 			{:else}
 				<span class="hint">none published yet</span>
 			{/each}
+			{#if showLive && listOrder.order === 'asc'}{@render liveChip()}{/if}
 		</div>
 	</div>
 </div>
 
+<div class="doc-body">
 <div class="page">
 	<div class="page-inner wide">
 		{#if snapshot}
@@ -286,7 +345,7 @@
 			</div>
 		{/if}
 
-		<div class="cols-2">
+		<div>
 			<section class="panel">
 				<div class="header-top">
 					<h2>Feedback{doc.feedback.length ? ` · ${openCount} open` : ''}</h2>
@@ -322,29 +381,24 @@
 					{/each}
 				</div>
 			</section>
-
-			<aside class="panel">
-				<h2>Produced by</h2>
-				<div class="mini-list">
-					{#each doc.prompts as p (p.threadSlug + p.id)}
-						<a href="{threadUrl(project, p.threadSlug)}?item=pr-{p.id}">
-							<span class="t">{p.title}</span>
-							<span class="s">{p.threadTitle}</span>
-						</a>
-					{:else}
-						<span class="hint">No prompt asked for this file.</span>
-					{/each}
-				</div>
-			</aside>
 		</div>
 	</div>
+</div>
+
+{#if sideOpen}
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+	<div class="side-scrim open" onclick={() => setSide(false)}></div>
+	<aside class="side-window" aria-label="Produced by">
+		<ProvenancePanel {project} {doc} {provenance} onclose={() => setSide(false)} />
+	</aside>
+{/if}
 </div>
 
 {#if publishing}
 	<Modal title="Publish a version" onclose={() => (publishing = false)}>
 		<p style="margin:0;color:var(--muted)">
-			Publishing freezes the current file as an immutable version (<code>{snapshotPath(doc.path, bump === 'custom' ? custom || 'x.y' : preview[bump])}</code>)
-			and leaves a note in the thread of the prompt that asked for it.
+			Publishing freezes the current file as an immutable version (<code>{snapshotPath(doc.path, bump === 'custom' ? custom || 'x.y' : preview[bump])}</code>),
+			records who made the change, and leaves a note in the thread you pick.
 			{doc.versions.length ? `Latest so far: v${doc.versions.at(-1)}.` : 'This is the first version.'}
 		</p>
 		<label class="check"><input type="radio" bind:group={bump} value="minor" /> Minor — v{preview.minor}</label>
@@ -357,6 +411,59 @@
 				style="width:100px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--bg)"
 				onfocus={() => (bump = 'custom')}
 			/>
+		</label>
+
+		<hr class="rule" />
+		<label class="field">
+			<span>Note in thread</span>
+			<select bind:value={thread}>
+				<option value="">No thread — just record it</option>
+				{#each threads as t (t.slug)}<option value={t.slug}>{t.title}</option>{/each}
+			</select>
+		</label>
+		<div class="field">
+			<label class="check">
+				<input type="checkbox" bind:checked={aiMade} /> This change was made with generative AI
+			</label>
+			<span class="hint">
+				{#if stopped}
+					Claude Code’s run of “{stopped.promptTitle}” changed this file{stopped.status === 'finished' ? '' : ` and was ${stopped.status}`}, and no version holds
+					its changes, so this starts ticked. Untick it only if you rewrote them yourself.
+				{:else}
+					Leave it empty for what you wrote yourself. Runs started from Ledger are recorded automatically; tick this for AI used elsewhere (a chat, an editor assistant, a paste).
+				{/if}
+			</span>
+		</div>
+		{#if aiMade && doc.prompts.length}
+			<label class="field">
+				<span>Which prompt asked for it? (optional)</span>
+				<select bind:value={promptId}>
+					<option value="">None of them</option>
+					{#each doc.prompts as p (p.id)}<option value={p.id}>{p.threadTitle} · {p.title || 'Untitled prompt'}</option>{/each}
+				</select>
+			</label>
+		{/if}
+		<label class="field">
+			<span>AI-use label for the result (optional)</span>
+			<select bind:value={level}>
+				<option value="">Not labelled</option>
+				{#each MMM as m (m.level)}<option value={m.level}>{m.name} — {m.tagline}</option>{/each}
+			</select>
+			{#if level}
+				<span class="hint">{MMM.find((m) => m.level === level)?.meaning}</span>
+			{/if}
+			{#if manMadeConflict}
+				<span class="pv-warn">Man-Made means no generative AI, but AI is recorded {aiMade ? 'for this change' : 'in this file’s history'}.</span>
+			{:else if suggestManMade}
+				<span class="hint">
+					Nothing here is recorded as AI. <button class="link accent" onclick={() => (level = 'man-made')}>Label it Man-Made</button> if that is true.
+				</span>
+			{/if}
+		</label>
+		<label class="field">
+			<span>Changelog (optional)</span>
+			<textarea class="edit-area" bind:value={changeNote} rows="2" placeholder="What changed, in your words"></textarea>
+			<span class="hint">Quoted in the note in the thread, and shown with the version in the Produced by window.</span>
 		</label>
 		{#snippet footer()}
 			<span class="spacer-h"></span>

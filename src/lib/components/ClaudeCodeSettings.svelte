@@ -30,12 +30,13 @@
 	let mode = $state<ClaudePermissionMode>('acceptEdits');
 	let model = $state('');
 	let confine = $state(true);
+	let autoRun = $state(false);
 	let busy = $state<'save' | 'check' | null>(null);
 	let checked = $state<ClaudeCodeCheck | null>(null);
 	let error = $state<string | null>(null);
 
 	const changed = $derived(
-		saved !== null && (cliPath.trim() !== saved.cliPath || mode !== saved.permissionMode || model.trim() !== saved.model || confine !== saved.confine)
+		saved !== null && (cliPath.trim() !== saved.cliPath || mode !== saved.permissionMode || model.trim() !== saved.model || confine !== saved.confine || autoRun !== saved.autoRun)
 	);
 
 	function show(settings: ClaudeCodeSettings) {
@@ -44,6 +45,7 @@
 		mode = settings.permissionMode;
 		model = settings.model;
 		confine = settings.confine;
+		autoRun = settings.autoRun;
 	}
 
 	onMount(async () => {
@@ -74,7 +76,7 @@
 		busy = 'save';
 		error = null;
 		try {
-			show(await claudeCodeApi.saveSettings(cliPath, mode, model, confine));
+			show(await claudeCodeApi.saveSettings(cliPath, mode, model, confine, autoRun));
 			toast('Claude Code settings saved');
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -135,6 +137,15 @@
 		any <code>.env</code> file; the project folder’s own Claude settings (hooks, say) are ignored, and no MCP servers are started, so files that arrive
 		in the vault through sync can’t run anything. It needs a recent Claude Code: if a run fails with “unknown option”, update Claude Code or turn this
 		off. There is no setting that skips Claude Code’s permission checks.
+	</div>
+
+	<label class="check">
+		<input type="checkbox" bind:checked={autoRun} /> Run a prompt as soon as it is created
+	</label>
+	<div class="hint">
+		Off by default. When it is on, saving a new prompt starts it in Claude Code at once, so you don’t press <b>Run in Claude Code</b> and don’t see the
+		confirmation of what will be sent first. It runs with the permissions chosen above and uses your Claude allowance, and it starts before any guiding
+		questions from a template are answered. You can still cancel it from the prompt’s card, and a prompt you already have still needs the button.
 	</div>
 
 	{#if error}<div class="notice bad">{error}</div>{/if}

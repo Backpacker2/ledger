@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { api } from '$lib/api';
+	import { api, claudeCodeApi } from '$lib/api';
+	import { autoRunNewPrompt } from '$lib/claudeRuns.svelte';
 	import { attempt, refresh, toast } from '$lib/ui.svelte';
 	import type { DeliverableSummary, Prompt, PromptDraft, Template } from '$lib/types';
 	import MarkdownEditor from './MarkdownEditor.svelte';
@@ -29,6 +30,8 @@
 	let templateId = $state('');
 	let templates = $state<Template[]>([]);
 	let saving = $state(false);
+	// Whether saving a new prompt starts it in Claude Code by itself (a setting).
+	let autoRun = $state(false);
 
 	// What the prompt asks for: a new deliverable, or changes to one that is already in the project.
 	let kind = $state<'new' | 'existing'>('new');
@@ -39,6 +42,11 @@
 
 	onMount(async () => {
 		if (prompt) return;
+		try {
+			autoRun = (await claudeCodeApi.settings()).autoRun;
+		} catch {
+			// The line about it is only a courtesy.
+		}
 		templates = (await attempt(() => api.effectiveTemplates(project))) ?? [];
 		existing = ((await attempt(() => api.listDeliverables(project))) ?? []).filter((d) => d.exists);
 		// A draft for a document that is still there starts out asking for changes to it.
@@ -65,6 +73,8 @@
 		if (!saved) return;
 		if (!prompt && template?.questions.length) toast(`Added ${template.questions.length} guiding question${template.questions.length === 1 ? '' : 's'} to the thread`);
 		await refresh();
+		// Not awaited: the prompt is made, and the run reports for itself.
+		if (!prompt) void autoRunNewPrompt(project, thread, saved);
 		onsaved?.(saved);
 		onclose();
 	}
@@ -139,6 +149,7 @@
 
 	{#snippet footer()}
 		<span class="spacer-h"></span>
+		{#if !prompt && autoRun}<span class="hint">Claude Code starts on it as soon as it is created</span>{/if}
 		<span class="hint">Ctrl+Enter saves</span>
 		<button class="btn ghost" onclick={onclose}>Cancel</button>
 		<button class="btn primary" onclick={save} disabled={saving || !title.trim() || (kind === 'existing' && !chosen)}>{prompt ? 'Save' : 'Create prompt'}</button>

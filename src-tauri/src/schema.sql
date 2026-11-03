@@ -58,6 +58,8 @@ CREATE TABLE posts (
     version_published   INTEGER NOT NULL DEFAULT 0,
     deliverable_path    TEXT,
     deliverable_version TEXT,
+    -- On a "version published" note: the prompt that caused the version. Deliberately not a foreign key, like `parent_id`.
+    prompt_id           TEXT,
     created_at          TEXT NOT NULL,
     updated_at          TEXT NOT NULL,
     body                TEXT NOT NULL,
@@ -151,6 +153,26 @@ CREATE TABLE deliverables (
     modified     TEXT NOT NULL,
     body         TEXT,
     PRIMARY KEY (project_slug, path)
+);
+
+-- How a published version came to be: who made the change, where it is filed, and the AI-use label (MMM) declared
+-- for the product at that version. Kept as versions/<id>.md in the project. `thread_slug`, `prompt_id` and `run_id`
+-- are deliberately not foreign keys: deleting a thread, a prompt or a note must not erase how a version came about.
+-- `author` is 'ai', 'human', or '' when the origin was never recorded.
+CREATE TABLE version_records (
+    id               TEXT PRIMARY KEY,
+    project_slug     TEXT NOT NULL REFERENCES projects(slug) ON DELETE CASCADE,
+    deliverable_path TEXT NOT NULL,
+    version          TEXT NOT NULL,
+    thread_slug      TEXT,
+    prompt_id        TEXT,
+    run_id           TEXT,
+    author           TEXT NOT NULL DEFAULT '',
+    mmm              TEXT,
+    sha256           TEXT,
+    note             TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL,
+    UNIQUE (project_slug, deliverable_path, version)
 );
 
 -- scope '' is a vault-wide template, otherwise it is the slug of the project the template belongs to.

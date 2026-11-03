@@ -60,11 +60,14 @@ pub struct ClaudeSettings {
     /// Extra guard rails (on by default): the run ignores the project folder's own Claude settings and is told not
     /// to read or write outside the project folder or touch `.ledger/` and `.env` files. Needs a recent Claude Code.
     pub confine: bool,
+    /// Off by default: a prompt that is created starts running at once, without the confirmation that shows what will
+    /// be sent. The window does the starting (it is the one that sees a prompt being created); this is only the choice.
+    pub auto_run: bool,
 }
 
 impl Default for ClaudeSettings {
     fn default() -> Self {
-        ClaudeSettings { cli_path: String::new(), permission_mode: PermissionMode::default(), model: String::new(), confine: true }
+        ClaudeSettings { cli_path: String::new(), permission_mode: PermissionMode::default(), model: String::new(), confine: true, auto_run: false }
     }
 }
 
@@ -80,7 +83,7 @@ pub fn guard_path(root: &Path) -> PathBuf {
 impl ClaudeSettings {
     /// What the user typed, checked. The path may be pasted with its quotes; the model has to look like a model name,
     /// since it ends up in the command line.
-    pub fn validated(cli_path: &str, permission_mode: &str, model: &str, confine: bool) -> Result<ClaudeSettings> {
+    pub fn validated(cli_path: &str, permission_mode: &str, model: &str, confine: bool, auto_run: bool) -> Result<ClaudeSettings> {
         let mode = PermissionMode::parse(permission_mode).ok_or_else(|| Error::invalid("Choose one of the permission modes offered"))?;
         let model = model.trim();
         if !model.is_empty() && !valid_model(model) {
@@ -88,7 +91,7 @@ impl ClaudeSettings {
                 "That doesn't look like a model name. Use letters, digits and . _ : - / [ ] only, for example sonnet, opus or claude-sonnet-4-5",
             ));
         }
-        Ok(ClaudeSettings { cli_path: clean_path(cli_path)?, permission_mode: mode, model: model.to_string(), confine })
+        Ok(ClaudeSettings { cli_path: clean_path(cli_path)?, permission_mode: mode, model: model.to_string(), confine, auto_run })
     }
 
     fn to_json(&self) -> Value {
@@ -97,6 +100,7 @@ impl ClaudeSettings {
             "permissionMode": self.permission_mode.as_str(),
             "model": self.model,
             "confine": self.confine,
+            "autoRun": self.auto_run,
         })
     }
 }
@@ -135,6 +139,7 @@ pub fn load(root: &Path) -> ClaudeSettings {
         permission_mode: text("permissionMode").and_then(PermissionMode::parse).unwrap_or(defaults.permission_mode),
         model: text("model").map(str::trim).filter(|m| valid_model(m)).map(str::to_string).unwrap_or(defaults.model),
         confine: value.get("confine").and_then(Value::as_bool).unwrap_or(defaults.confine),
+        auto_run: value.get("autoRun").and_then(Value::as_bool).unwrap_or(defaults.auto_run),
     }
 }
 
