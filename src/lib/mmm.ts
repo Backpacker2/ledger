@@ -12,7 +12,7 @@ export interface Mmm {
 	tagline: string;
 	/** What the level means, from the site. */
 	meaning: string;
-	/** A colour for the dot; the text stays in the theme's ink so every theme keeps its contrast. */
+	/** The CSS token for the dot's colour (see app.css); the text stays in the theme's ink so every theme keeps its contrast. */
 	color: string;
 }
 
@@ -23,35 +23,35 @@ export const MMM: readonly Mmm[] = [
 		name: 'Lazy Prompter',
 		tagline: 'Made by GenAI',
 		meaning: 'GenAI produced almost everything, with some minimal prompting and perhaps a little modification.',
-		color: '#e26d6d'
+		color: 'var(--mmm-lazy-prompter)'
 	},
 	{
 		level: 'piggybacker',
 		name: 'Piggybacker',
 		tagline: 'Mostly made by GenAI',
 		meaning: 'GenAI did most of the work; the human did basic prompting, reprompting and curating of results.',
-		color: '#e0a645'
+		color: 'var(--mmm-piggybacker)'
 	},
 	{
 		level: 'cyborg',
 		name: 'Cyborg',
 		tagline: 'Made together with GenAI',
 		meaning: 'Human and machine collaborated closely: elaborate prompting, human review, rewriting or reprompting.',
-		color: '#7c7cf0'
+		color: 'var(--mmm-cyborg)'
 	},
 	{
 		level: 'handyman',
 		name: 'Handyman',
 		tagline: 'Assisted by GenAI',
 		meaning: 'GenAI played a supporting role (inspiration, correction), or was used heavily but the human still had to work harder.',
-		color: '#4ea8ff'
+		color: 'var(--mmm-handyman)'
 	},
 	{
 		level: 'man-made',
 		name: 'Man-Made',
 		tagline: 'Made without GenAI',
 		meaning: 'The product contains no generative AI.',
-		color: '#3ec28f'
+		color: 'var(--mmm-man-made)'
 	}
 ];
 

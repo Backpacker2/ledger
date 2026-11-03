@@ -5,6 +5,10 @@
 	import { MMM, authorLabel, sizeChange } from '$lib/mmm';
 	import { attempt, refresh } from '$lib/ui.svelte';
 	import type { Deliverable, MmmLevel, Provenance, ProvenanceVersion, VersionUpdate } from '$lib/types';
+	import MessageCircle from '@lucide/svelte/icons/message-circle';
+	import MessageSquare from '@lucide/svelte/icons/message-square';
+	import Play from '@lucide/svelte/icons/play';
+	import X from '@lucide/svelte/icons/x';
 	import MmmBadge from './MmmBadge.svelte';
 
 	let {
@@ -38,7 +42,7 @@
 
 <div class="pv-head">
 	<h2>Produced by</h2>
-	<button class="icon-btn" aria-label="Close" onclick={onclose}>✕</button>
+	<button class="icon-btn" aria-label="Close" onclick={onclose}><X size={18} /></button>
 </div>
 
 <div class="pv-summary">
@@ -97,7 +101,7 @@
 			{#each group.entries as e (e.kind + ':' + (e.kind === 'version' ? e.version : e.id))}
 				{#if e.kind === 'prompt'}
 					<div class="pv-row">
-						<span class="glyph" title="Prompt">◇</span>
+						<span class="glyph" title="Prompt"><MessageSquare size={13} /></span>
 						<span>Asked in</span>
 						{#if group.thread?.exists}
 							<a href={promptUrl(group.thread.slug, e.id)}>{e.title}</a>
@@ -107,7 +111,7 @@
 					</div>
 				{:else if e.kind === 'run'}
 					<div class="pv-row">
-						<span class="glyph" title="Claude Code run">▶</span>
+						<span class="glyph" title="Claude Code run"><Play size={13} /></span>
 						<span>
 							Claude Code run{e.status === 'finished' ? '' : `, ${e.status}`}
 							· {e.model || 'default model'} · {e.seconds < 60 ? `${e.seconds} s` : `${Math.floor(e.seconds / 60)} min ${e.seconds % 60} s`}
@@ -116,7 +120,7 @@
 					</div>
 				{:else if e.kind === 'feedback'}
 					<div class="pv-row">
-						<span class="glyph" title="Feedback">✎</span>
+						<span class="glyph" title="Feedback"><MessageCircle size={13} /></span>
 						<a href="{threadUrl(project, group.thread?.slug ?? '')}?item=f-{e.id}">
 							Feedback{e.status === 'open' ? ' (open)' : ' (resolved)'}{e.version ? ` on v${e.version}` : ''}: {e.excerpt}
 						</a>

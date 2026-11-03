@@ -41,6 +41,13 @@
 	--shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.45);
 	--shadow-toast: 0 8px 24px rgba(0, 0, 0, 0.3);
 	--shadow-drawer: 0 0 40px rgba(0, 0, 0, 0.5);
+
+	/* The AI-use (MMM) levels, from the most AI to the least: only the dot of a label is coloured. */
+	--mmm-lazy-prompter: var(--red);
+	--mmm-piggybacker: var(--amber);
+	--mmm-cyborg: var(--brand-indigo);
+	--mmm-handyman: #4ea8ff;
+	--mmm-man-made: var(--green);
 }
 
 /* ---------- themes ----------
@@ -549,7 +556,7 @@ mark { background: var(--highlight); color: inherit; border-radius: 3px; padding
 .pv-thread a:hover { color: var(--accent); }
 .pv-entries { display: flex; flex-direction: column; gap: 8px; padding-left: 10px; border-left: 2px solid var(--line); }
 .pv-row { display: flex; gap: 6px; align-items: baseline; font-size: 12.5px; color: var(--muted); }
-.pv-row .glyph { color: var(--faint); width: 14px; text-align: center; flex-shrink: 0; }
+.pv-row .glyph { color: var(--faint); width: 14px; display: inline-flex; align-self: center; justify-content: center; flex-shrink: 0; }
 .pv-row a { color: var(--muted); text-decoration: none; overflow-wrap: anywhere; }
 .pv-row a:hover { color: var(--accent); }
 .pv-version { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; display: flex; flex-direction: column; gap: 6px; }
@@ -573,6 +580,6 @@ select.pv-level { padding: 2px 6px; font-size: 11.5px; border-radius: 8px; width
 
 /* Where the window is too narrow to hold it beside the page, it is a drawer over it. */
 @media (max-width: 1099px) {
-	.side-window { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(420px, 92vw); box-shadow: -12px 0 40px rgba(0, 0, 0, 0.35); }
-	.side-scrim.open { display: block; position: fixed; inset: 0; z-index: 35; background: rgba(0, 0, 0, 0.35); }
+	.side-window { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(420px, 92vw); box-shadow: var(--shadow-drawer); }
+	.side-scrim.open { display: block; position: fixed; inset: 0; z-index: 35; background: var(--scrim-faint); }
 }
