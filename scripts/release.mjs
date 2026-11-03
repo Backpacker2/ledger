@@ -8,16 +8,15 @@
 //   a breaking change (`feat!: …`, `fix(api)!: …`, or a `BREAKING CHANGE:` footer)  → major  0.4.2 → 1.0.0
 //   feat                                                                             → minor  0.4.2 → 0.5.0
 //   any other conventional type (fix, perf, refactor, docs, chore, …)               → patch  0.4.2 → 0.4.3
-// Commits that aren't conventional don't count; with none that do, there is no release.
+// Commits that aren't conventional don't count; with none that do, there is no release. What counts is defined in
+// scripts/conventional.mjs, which the pull request title check (scripts/pr-title.mjs) uses too.
 //
 // usage: node scripts/release.mjs            show the next version and its notes, change nothing
 //        node scripts/release.mjs --write    write them (what CI does)
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import { BREAKING_FOOTER, RELEASE_SCOPE, parseHeader } from './conventional.mjs';
 
-const TYPES = ['feat', 'fix', 'perf', 'refactor', 'style', 'docs', 'test', 'build', 'ci', 'chore', 'revert'];
-const HEADER = new RegExp(`^(${TYPES.join('|')})(?:\\(([^)]*)\\))?(!)?: (.+)$`);
-const BREAKING_FOOTER = /^BREAKING[ -]CHANGE: (.+)$/m;
 const RANK = { patch: 1, minor: 2, major: 3 };
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -41,14 +40,14 @@ const commits = log
 	.filter(Boolean)
 	.map((entry) => {
 		const [hash, subject, body = ''] = entry.split('\x1f');
-		const m = HEADER.exec(subject);
-		if (!m) return { hash, subject, conventional: false };
-		const [, type, scope, bang, description] = m;
+		const header = parseHeader(subject);
+		if (!header) return { hash, subject, conventional: false };
+		const { type, scope, bang, description } = header;
 		const footer = BREAKING_FOOTER.exec(body);
 		return { hash, subject, conventional: true, type, scope, description, breaking: Boolean(bang || footer), breakingNote: footer?.[1] };
 	})
 	// Release commits are the result of a release, not a reason for one.
-	.filter((c) => !(c.conventional && c.type === 'chore' && c.scope === 'release'));
+	.filter((c) => !(c.conventional && c.type === 'chore' && c.scope === RELEASE_SCOPE));
 
 const counted = commits.filter((c) => c.conventional);
 const bump = counted
