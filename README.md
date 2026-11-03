@@ -123,7 +123,7 @@ Install a release to use Ledger and get updates from inside the app; build it fr
 
 ### Installing a release
 
-Every [release](https://github.com/openledger-nl/ledger/releases) carries installers:
+Every [release](https://github.com/Backpacker2/ledger/releases) carries installers:
 
 | System | Download |
 |---|---|
