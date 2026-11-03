@@ -8,7 +8,7 @@ use tempfile::tempdir;
 use crate::error::Error;
 use crate::models::{Bump, Criterion, StoryDraft, StoryUpdate, TaskUpdate};
 use crate::posts::AddOptions;
-use crate::{board, db, deliverables, feedback, markdown, posts, projects, prompts, search, stories, templates, threads, uploads};
+use crate::{activity, board, db, deliverables, feedback, markdown, posts, projects, prompts, search, stories, templates, threads, uploads};
 
 fn conn() -> Connection {
     db::open_in_memory().unwrap()
@@ -608,6 +608,37 @@ fn columns_are_per_project_and_guarded() {
     board::delete_column(&c, &other, "backlog").unwrap();
     board::delete_column(&c, &other, "doing").unwrap();
     assert_eq!(message(board::delete_column(&c, &other, "done").unwrap_err()), "The board needs at least one column");
+}
+
+// ---- activity ---------------------------------------------------------------------------------------
+
+#[test]
+fn activity_counts_what_you_made_and_not_what_the_app_wrote_for_you() {
+    let c = conn();
+    let dir = tempdir().unwrap();
+    let (p, t) = setup(&c);
+    let other = projects::create(&c, "Other").unwrap().slug;
+
+    let first = posts::add(&c, &p, &t, "A thought", AddOptions::default()).unwrap();
+    posts::add(&c, &p, &t, "A reply", reply(&first.id)).unwrap();
+    posts::add(&c, &p, &t, "What is it for?", AddOptions { guiding_question: true, ..Default::default() }).unwrap();
+    prompts::create(&c, &p, &t, "Memo", "Write it", None).unwrap();
+    let memo = deliverables::create(&c, &p, "Memo", "Draft").unwrap();
+    deliverables::publish(&c, dir.path(), &p, &memo.path, Bump::Major, None).unwrap(); // also posts a "version published" note
+    feedback::add(&c, &p, &t, &memo.path, "Needs numbers").unwrap();
+    stories::create(&c, &p, story("MM01", "Sign in")).unwrap();
+    board::create_task(&c, &other, "Elsewhere", "", None, None).unwrap();
+
+    let events = activity::list(&c).unwrap();
+    let count = |project: &str, kind: &str| events.iter().filter(|e| e.project_slug == project && e.kind == kind).count();
+    assert_eq!(count(&p, "thread"), 1);
+    assert_eq!(count(&p, "post"), 2, "guiding questions and the publish note are not yours");
+    assert_eq!(count(&p, "prompt"), 1);
+    assert_eq!(count(&p, "version"), 1);
+    assert_eq!(count(&p, "feedback"), 1);
+    assert_eq!(count(&p, "story"), 1);
+    assert_eq!(count(&other, "task"), 1);
+    assert!(events.windows(2).all(|w| w[0].at <= w[1].at), "oldest first");
 }
 
 // ---- search and markdown ----------------------------------------------------------------------------

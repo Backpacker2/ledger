@@ -1,3 +1,4 @@
+mod activity;
 mod board;
 mod claude_code;
 mod commands;
@@ -113,6 +114,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::render_markdown,
             commands::search,
+            commands::list_activity,
             commands::list_projects,
             commands::create_project,
             commands::rename_project,

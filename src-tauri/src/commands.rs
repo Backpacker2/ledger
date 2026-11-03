@@ -19,7 +19,7 @@ use crate::screenshot::{self, Region, ScreenshotSettings};
 use crate::settings::{self, SyncConfig, SyncEnv};
 use crate::state::App;
 use crate::syncer::SyncStatus;
-use crate::{board, deliverables, feedback, markdown, posts, projects, prompts, provenance, search, stories, templates, threads, uploads};
+use crate::{activity, board, deliverables, feedback, markdown, posts, projects, prompts, provenance, search, stories, templates, threads, uploads};
 
 #[tauri::command]
 pub fn render_markdown(body: String) -> String {
@@ -29,6 +29,12 @@ pub fn render_markdown(body: String) -> String {
 #[tauri::command]
 pub fn search(app: State<App>, query: String) -> Result<Vec<SearchHit>> {
     app.read(|c, _| search::search(c, &query))
+}
+
+/// Everything made in the vault and when, oldest first: the contribution graph's events.
+#[tauri::command]
+pub fn list_activity(app: State<App>) -> Result<Vec<ActivityEvent>> {
+    app.read(|c, _| activity::list(c))
 }
 
 // ---- projects ---------------------------------------------------------------------------------------
