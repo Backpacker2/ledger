@@ -192,10 +192,9 @@ Commits that aren't conventional are left out; with none that count, there is no
 `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `Cargo.lock` (the app shows the Cargo one), the
 notes go to [CHANGELOG.md](CHANGELOG.md), and CI commits that as `chore(release): vX.Y.Z`, tags it `vX.Y.Z` and
 creates the GitHub release as a draft. It then builds the installers from the tag on Windows, macOS and Linux, signs
-them for the updater with the key in the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, uploads them with their `.sig` files and the `latest.json` the app reads, and
-publishes the release once every platform has been built. A release whose build failed stays a draft, which the app
-never sees. Don't bump versions by hand.
+them for the updater with the password-less key in the repository secret `TAURI_SIGNING_PRIVATE_KEY`, uploads them with
+their `.sig` files and the `latest.json` the app reads, and publishes the release once every platform has been built. A
+release whose build failed stays a draft, which the app never sees. Don't bump versions by hand.
 
 `main` only takes pull requests (the `protected-main` ruleset), so CI pushes that release commit and tag with a deploy
 key the ruleset lets through: the write key whose private half is the Actions secret `RELEASE_DEPLOY_KEY`.
