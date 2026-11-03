@@ -8,6 +8,7 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Toasts from '$lib/components/Toasts.svelte';
 	import { drawer, initTheme, startBackendEvents } from '$lib/ui.svelte';
+	import wordmark from '$lib/assets/brand/svg/ledger-wordmark-on-dark.svg';
 	import type { LayoutData } from './$types';
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
@@ -28,7 +29,7 @@
 	<div class="app">
 		<header class="topbar">
 			<button class="icon-btn" aria-label="Menu" onclick={() => (drawer.open = true)}>☰</button>
-			<span>Ledger</span>
+			<img src={wordmark} alt="Ledger" />
 		</header>
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 		<div class="scrim" class:open={drawer.open} onclick={() => (drawer.open = false)}></div>

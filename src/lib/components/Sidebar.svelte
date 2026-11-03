@@ -7,6 +7,7 @@
 	import { listOrder } from '$lib/order.svelte';
 	import { drawer, sync } from '$lib/ui.svelte';
 	import type { ProjectSummary } from '$lib/types';
+	import wordmark from '$lib/assets/brand/svg/ledger-wordmark-on-dark.svg';
 
 	let { projects }: { projects: ProjectSummary[] } = $props();
 
@@ -81,7 +82,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 <aside class="sidebar" class:open={drawer.open} onclick={closeDrawer}>
-	<div class="brand"><span class="logo">L</span><span>Ledger</span></div>
+	<div class="brand"><img src={wordmark} alt="Ledger" /></div>
 
 	<form class="search-wrap" onsubmit={search}>
 		<input type="search" placeholder="Search everything…" autocomplete="off" spellcheck="false" bind:value={query} />

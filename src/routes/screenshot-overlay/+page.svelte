@@ -119,15 +119,15 @@
 	.dim {
 		position: absolute;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.4);
+		background: var(--scrim-faint);
 		pointer-events: none;
 	}
 
 	/* The rectangle shows the picture undimmed; its enormous shadow dims everything around it. */
 	.selection {
 		position: absolute;
-		border: 1px solid #7c7cf0;
-		box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
+		border: 1px solid var(--brand-indigo);
+		box-shadow: 0 0 0 100vmax var(--scrim-soft);
 		pointer-events: none;
 	}
 
@@ -137,9 +137,9 @@
 		top: calc(100% + 6px);
 		padding: 2px 8px;
 		border-radius: 6px;
-		background: rgba(18, 20, 27, 0.85);
-		color: #fff;
-		font: 600 12px/1.5 system-ui, sans-serif;
+		background: var(--chip-dark);
+		color: var(--side-ink);
+		font: 600 12px/1.5 var(--font-sans);
 		white-space: nowrap;
 	}
 
@@ -150,9 +150,9 @@
 		transform: translateX(-50%);
 		padding: 6px 14px;
 		border-radius: 999px;
-		background: rgba(18, 20, 27, 0.85);
-		color: #fff;
-		font: 500 13px/1.5 system-ui, sans-serif;
+		background: var(--chip-dark);
+		color: var(--side-ink);
+		font: 500 13px/1.5 var(--font-sans);
 		pointer-events: none;
 	}
 </style>

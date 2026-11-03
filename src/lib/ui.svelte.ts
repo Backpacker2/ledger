@@ -76,13 +76,14 @@ export function promptDialog(options: PromptOptions): Promise<string | null> {
 
 // ---- theme ------------------------------------------------------------------------------------------
 
+// Each theme's colours live in app.css; the settings swatches preview them with data-theme.
 export const themes = [
-	{ id: 'dark', name: 'Dark', swatch: ['#0e1016', '#191c25', '#1f2330', '#7c7cf0'] },
-	{ id: 'night', name: 'Night', swatch: ['#000000', '#0a0a0c', '#111114', '#8f8ff5'] },
-	{ id: 'forest', name: 'Forest', swatch: ['#0b110d', '#131c17', '#18241d', '#4cc38a'] },
-	{ id: 'ocean', name: 'Ocean', swatch: ['#0a111a', '#111b29', '#152234', '#4ea8ff'] },
-	{ id: 'sepia', name: 'Sepia', swatch: ['#3b2f22', '#fbf5e9', '#fffaf0', '#b0602c'] },
-	{ id: 'light', name: 'Light', swatch: ['#1c1f2a', '#ffffff', '#f6f6f3', '#5b5bd6'] }
+	{ id: 'dark', name: 'Dark' },
+	{ id: 'night', name: 'Night' },
+	{ id: 'forest', name: 'Forest' },
+	{ id: 'ocean', name: 'Ocean' },
+	{ id: 'sepia', name: 'Sepia' },
+	{ id: 'light', name: 'Light' }
 ] as const;
 
 const THEME_KEY = 'ledger-theme';
