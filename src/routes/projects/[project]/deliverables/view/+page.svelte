@@ -460,11 +460,11 @@
 				</span>
 			{/if}
 		</label>
-		<label class="field">
+		<div class="field">
 			<span>Changelog (optional)</span>
-			<textarea class="edit-area" bind:value={changeNote} rows="2" placeholder="What changed, in your words"></textarea>
+			<MarkdownEditor bind:value={changeNote} rows={2} label="Changelog" placeholder="What changed, in your words" />
 			<span class="hint">Quoted in the note in the thread, and shown with the version in the Produced by window.</span>
-		</label>
+		</div>
 		{#snippet footer()}
 			<span class="spacer-h"></span>
 			<button class="btn ghost" onclick={() => (publishing = false)}>Cancel</button>
