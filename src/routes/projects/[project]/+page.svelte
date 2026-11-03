@@ -2,6 +2,7 @@
 	import { api } from '$lib/api';
 	import { newThreadFlow, threadUrl } from '$lib/actions';
 	import Markdown from '$lib/components/Markdown.svelte';
+	import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
 	import { ago, plural } from '$lib/format';
 	import { orderThreads } from '$lib/order';
 	import { listOrder } from '$lib/order.svelte';
@@ -30,11 +31,6 @@
 		editing = false;
 		await refresh();
 	}
-
-	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save();
-		if (e.key === 'Escape') editing = false;
-	}
 </script>
 
 <div class="page">
@@ -51,8 +47,16 @@
 					{/if}
 				</div>
 				{#if editing}
-					<!-- svelte-ignore a11y_autofocus -->
-					<textarea class="doc-editor" bind:value={draft} {onkeydown} autofocus spellcheck="false"></textarea>
+					<MarkdownEditor
+						bind:value={draft}
+						variant="doc"
+						minHeight="58vh"
+						label="Reading guide"
+						autofocus
+						spellcheck={false}
+						onsubmit={save}
+						oncancel={() => (editing = false)}
+					/>
 					<div class="row-end">
 						<span class="hint" style="align-self:center">Ctrl+Enter saves</span>
 						<button class="btn ghost" onclick={() => (editing = false)}>Cancel</button>

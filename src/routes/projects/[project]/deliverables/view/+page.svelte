@@ -4,6 +4,7 @@
 	import FeedbackCard from '$lib/components/FeedbackCard.svelte';
 	import FileImage from '$lib/components/FileImage.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
+	import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { api } from '$lib/api';
 	import { deliverableFile, deliverableUrl, formatSize, nextVersion, snapshotPath, threadUrl } from '$lib/actions';
@@ -259,13 +260,7 @@
 			</div>
 			<div class="editor-split" class:both={mode === 'split'}>
 				{#if mode !== 'preview'}
-					<textarea
-						class="doc-editor"
-						bind:value={body}
-						oninput={edited}
-						spellcheck="true"
-						placeholder="Write it in markdown…"
-					></textarea>
+					<MarkdownEditor bind:value={body} variant="doc" minHeight="58vh" label={doc.name} placeholder="Write it in markdown…" oninput={edited} />
 				{/if}
 				{#if mode !== 'write'}
 					<div class="doc-view">
@@ -308,15 +303,12 @@
 								{#each threads as t (t.slug)}<option value={t.slug}>{t.title}</option>{/each}
 							</select>
 						</div>
-						<textarea
-							class="edit-area"
+						<MarkdownEditor
 							bind:value={feedbackText}
-							rows="3"
+							label="Feedback"
 							placeholder="What works, what doesn’t, what to change…"
-							onkeydown={(e) => {
-								if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && feedbackText.trim()) addFeedback();
-							}}
-						></textarea>
+							onsubmit={() => feedbackText.trim() && addFeedback()}
+						/>
 						<div class="row-end">
 							<button class="btn small primary" onclick={addFeedback} disabled={feedbackBusy || !feedbackText.trim() || !feedbackThread}>
 								Add feedback

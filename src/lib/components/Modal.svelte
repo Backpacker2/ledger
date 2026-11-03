@@ -20,7 +20,7 @@
 
 	$effect(() => {
 		stack.push(me);
-		root.querySelector<HTMLElement>('[data-autofocus], input:not([type=checkbox]), textarea, select')?.focus();
+		root.querySelector<HTMLElement>('[data-autofocus], input:not([type=checkbox]), select, .cm-content')?.focus();
 		return () => {
 			stack.splice(stack.indexOf(me), 1);
 		};

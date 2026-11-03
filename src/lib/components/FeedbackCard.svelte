@@ -6,6 +6,7 @@
 	import { attempt, confirmDialog, refresh } from '$lib/ui.svelte';
 	import type { Feedback } from '$lib/types';
 	import Markdown from './Markdown.svelte';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 	import PromptModal from './PromptModal.svelte';
 
 	/** `onDeliverable`: shown on the deliverable's own page, where naming the deliverable would only be noise. */
@@ -48,11 +49,6 @@
 		if (!ok) return;
 		if ((await attempt(() => api.deleteFeedback(project, thread, feedback.id))) !== undefined) await refresh();
 	}
-
-	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save();
-		if (e.key === 'Escape') editing = false;
-	}
 </script>
 
 <div class="card feedback-card" class:resolved id="f-{feedback.id}">
@@ -72,8 +68,7 @@
 	</div>
 
 	{#if editing}
-		<!-- svelte-ignore a11y_autofocus -->
-		<textarea class="edit-area" bind:value={draft} {onkeydown} autofocus></textarea>
+		<MarkdownEditor bind:value={draft} label="Feedback" autofocus onsubmit={save} oncancel={() => (editing = false)} />
 		<div class="row-end">
 			<span class="hint" style="align-self:center">Ctrl+Enter saves</span>
 			<button class="btn small ghost" onclick={() => (editing = false)}>Cancel</button>

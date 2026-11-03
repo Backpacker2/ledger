@@ -2,6 +2,7 @@
 	import { api } from '$lib/api';
 	import { attempt, confirmDialog, refresh } from '$lib/ui.svelte';
 	import type { Board, Task, ThreadSummary } from '$lib/types';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 	import Modal from './Modal.svelte';
 
 	/** `task` is null when creating one (it lands in the backlog). The modal is mounted fresh each time. */
@@ -68,10 +69,10 @@
 		Title
 		<input bind:value={title} placeholder="What needs doing?" />
 	</label>
-	<label class="field">
+	<div class="field">
 		Details
-		<textarea bind:value={body} rows="5" placeholder="Context, acceptance, links. Markdown works."></textarea>
-	</label>
+		<MarkdownEditor bind:value={body} rows={5} label="Details" placeholder="Context, acceptance, links. Markdown works." />
+	</div>
 	<div class="form-row">
 		<label class="field grow">
 			Column

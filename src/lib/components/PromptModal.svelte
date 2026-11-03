@@ -3,6 +3,7 @@
 	import { api } from '$lib/api';
 	import { attempt, refresh, toast } from '$lib/ui.svelte';
 	import type { DeliverableSummary, Prompt, PromptDraft, Template } from '$lib/types';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 	import Modal from './Modal.svelte';
 
 	/**
@@ -105,10 +106,15 @@
 		Title
 		<input bind:value={title} placeholder="e.g. Write the pricing brief" maxlength="200" />
 	</label>
-	<label class="field">
+	<div class="field">
 		What do you want?
-		<textarea bind:value={body} rows="8" placeholder="Describe the deliverable: audience, scope, what good looks like. Markdown works."></textarea>
-	</label>
+		<MarkdownEditor
+			bind:value={body}
+			rows={8}
+			label="What do you want?"
+			placeholder="Describe the deliverable: audience, scope, what good looks like. Markdown works."
+		/>
+	</div>
 
 	{#if !prompt}
 		<div class="field">
