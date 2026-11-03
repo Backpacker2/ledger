@@ -12,6 +12,8 @@
 	let { data }: { data: PageData } = $props();
 
 	const project = $derived(data.project);
+	// The guide is the project's README.md: pictures in it are looked for from the project's folder.
+	const images = $derived({ project: project.slug, dir: '' });
 	const threads = $derived(orderThreads(data.projects.find((p) => p.slug === project.slug)?.threads ?? [], listOrder.order));
 
 	let editing = $state(false);
@@ -54,6 +56,7 @@
 						label="Reading guide"
 						autofocus
 						spellcheck={false}
+						{images}
 						onsubmit={save}
 						oncancel={() => (editing = false)}
 					/>
@@ -63,7 +66,7 @@
 						<button class="btn primary" onclick={save} disabled={saving}>Save</button>
 					</div>
 				{:else if project.readme.trim()}
-					<Markdown html={project.readmeHtml} />
+					<Markdown html={project.readmeHtml} {images} />
 				{:else}
 					<p class="hint" style="margin:0">The guide is empty. Write down what a newcomer should read first.</p>
 				{/if}

@@ -71,7 +71,7 @@ Use a [fine-grained token](https://github.com/settings/personal-access-tokens/ne
 - **User stories** — an id you choose (`MM01`), a summary, "As a / I want to / Such that", notes and acceptance criteria you tick off. A story links to any number of threads.
 - **Board** — per project, with customisable columns (Backlog → Doing → Done by default). Tasks can point at a story and a thread. Drag a card, or use its arrows, to change column; a column that still holds tasks can't be deleted.
 - **Screenshots** — press a global hotkey (default Ctrl/⌘+Shift+S) anywhere: your own screenshot tool (Flameshot, say) or the built-in capture takes the picture, and Ledger offers to attach it to the thread you have open. Pictures sent to Ledger with "Open with" land the same way. See below.
-- **Writing** — every markdown field (notes, prompts, feedback, descriptions, deliverables, templates, the reading guide) is the same inline editor ([CodeMirror 6](https://codemirror.net)). It edits the markdown itself, so the file gets exactly what you typed, but reads like the rendered page: headings, bold, code and links are shown as such and their marks fade away except where the cursor is. Task boxes can be ticked, Ctrl/⌘+click opens a link, and Ctrl/⌘+B, I and K make bold, italic and a link.
+- **Writing** — every markdown field (notes, prompts, feedback, descriptions, deliverables, templates, the reading guide) is the same inline editor ([CodeMirror 6](https://codemirror.net)). It edits the markdown itself, so the file gets exactly what you typed, but reads like the rendered page: headings, bold, code and links are shown as such and their marks fade away except where the cursor is, tables are drawn as tables until you click into one, and pictures are shown in place. Task boxes can be ticked, Ctrl/⌘+click opens a link, and Ctrl/⌘+B, I and K make bold, italic and a link.
 - **Search** across every post, prompt, feedback and deliverable, with highlighted snippets. **Themes**: Dark, Night, Forest, Ocean, Sepia, Light. **Order** (Settings): one choice, newest first by default, for the posts of a thread, the threads in the sidebar, and the feedback, versions and "Produced by" window of a deliverable. It only changes how things are shown. **Run prompts by themselves** (Settings → Claude Code, off by default): a prompt you create starts running in Claude Code at once, without the confirmation of what will be sent.
 
 ## Screenshots
@@ -164,7 +164,8 @@ src/                     SvelteKit frontend (static SPA)
                          stories, board, templates · templates · search · settings
   lib/api.ts             typed wrappers over the Tauri commands
   lib/ui.svelte.ts       toasts, dialogs, theme, and the backend's sync/vault/screenshot events
-  lib/markdownEditor.ts  the markdown editor (CodeMirror 6): looks, live preview of the marks, source mode, keys
+  lib/markdownEditor.ts  the markdown editor (CodeMirror 6): looks, live preview of the marks, tables, source mode, keys
+  lib/vaultImages.ts     pictures in markdown: read from the vault, beside the file that shows them
   lib/components/        sidebar tree, post/prompt/feedback/upload cards, composer, modals, hotkey recorder …
   routes/screenshot-overlay  the built-in capture's region picker (its own window; not used on Linux)
 scripts/release.mjs      the next version from the conventional commits (run by CI)

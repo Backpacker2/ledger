@@ -17,6 +17,7 @@
 	import { MMM } from '$lib/mmm';
 	import { orderFeedback, orderVersions } from '$lib/order';
 	import { listOrder } from '$lib/order.svelte';
+	import { dirOf } from '$lib/vaultImages';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';
 	import type { Bump, MmmLevel } from '$lib/types';
 	import type { PageData } from './$types';
@@ -30,6 +31,8 @@
 	const snapshot = $derived(doc.version !== null);
 	const isMarkdown = $derived(doc.kind === 'markdown');
 	const file = $derived(deliverableFile(doc.path));
+	// Pictures in it are looked for beside the file.
+	const images = $derived({ project, dir: dirOf(file) });
 
 	// ---- the editable copy (markdown) ----------------------------------------------------------
 	// The page keeps its own text while you type and saves it in the background. It is only reset when a
@@ -318,7 +321,7 @@
 		{#if !doc.exists && !snapshot}
 			<div class="notice">The file is not in the project’s deliverables folder (any more).</div>
 		{:else if isMarkdown && snapshot}
-			<div class="doc-view"><Markdown html={doc.html ?? ''} /></div>
+			<div class="doc-view"><Markdown html={doc.html ?? ''} {images} /></div>
 		{:else if isMarkdown}
 			<div class="form-row" style="justify-content:space-between">
 				<div class="seg" role="group" aria-label="View">
@@ -330,7 +333,7 @@
 			</div>
 			{#if mode === 'reading'}
 				<div class="doc-view">
-					{#if body.trim()}<Markdown {html} />{:else}<span class="hint">Nothing here yet.</span>{/if}
+					{#if body.trim()}<Markdown {html} {images} />{:else}<span class="hint">Nothing here yet.</span>{/if}
 				</div>
 			{:else}
 				<MarkdownEditor
@@ -340,6 +343,7 @@
 					label={doc.name}
 					placeholder="Write it in markdown…"
 					source={mode === 'source'}
+					{images}
 					oninput={edited}
 				/>
 			{/if}

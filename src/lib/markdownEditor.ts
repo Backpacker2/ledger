@@ -6,7 +6,18 @@
 import { defaultKeymap, history, historyKeymap, indentLess, indentMore } from '@codemirror/commands';
 import { insertNewlineContinueMarkup, markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
-import { Compartment, EditorSelection, EditorState, Prec, type Extension, type Range, type StateCommand } from '@codemirror/state';
+import {
+	Compartment,
+	EditorSelection,
+	EditorState,
+	Facet,
+	Prec,
+	StateEffect,
+	StateField,
+	type Extension,
+	type Range,
+	type StateCommand
+} from '@codemirror/state';
 import {
 	Decoration,
 	drawSelection,
@@ -20,6 +31,9 @@ import {
 } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { isVaultSrc, isWebSrc, type ImageLoad } from '$lib/vaultImages';
+
+type SyntaxNode = ReturnType<typeof syntaxTree>['topNode'];
 
 // ---- looks ---------------------------------------------------------------------------------------
 // Colours are the app's theme tokens, so one editor theme serves all six themes. Sizes follow `.md` in app.css.
@@ -58,6 +72,9 @@ const theme = EditorView.theme({
 	'.cm-md-link': { color: 'var(--accent)', textDecoration: 'underline', textDecorationColor: 'var(--accent-soft)', textUnderlineOffset: '2px' },
 	'.cm-md-bullet': { color: 'var(--muted)', padding: '0 4px 0 2px' },
 	'.cm-md-task': { margin: '0 6px 0 0', verticalAlign: '-2px', accentColor: 'var(--accent)', cursor: 'pointer' },
+	'.cm-md-picture img': { maxWidth: '100%', borderRadius: '6px', verticalAlign: 'bottom' },
+	'.cm-md-picture.missing': { color: 'var(--faint)', fontStyle: 'italic' },
+	'.cm-md-table-widget': { padding: '2px 0 6px', overflowX: 'auto' },
 	'&.cm-md-source .cm-scroller': { fontFamily: 'var(--font-mono)', fontSize: '13px' }
 });
 
@@ -106,6 +123,46 @@ class Bullet extends WidgetType {
 const checked = Decoration.replace({ widget: new Checkbox(true) });
 const unchecked = Decoration.replace({ widget: new Checkbox(false) });
 const bullet = Decoration.replace({ widget: new Bullet() });
+
+// Pictures: web ones always; ones in the vault only where the editor was told where to read them (`loadImage`).
+const webOnly: ImageLoad = (src) => Promise.resolve(isWebSrc(src) ? src.trim() : null);
+const imageLoad = Facet.define<ImageLoad, ImageLoad>({ combine: (loads) => loads[0] ?? webOnly });
+
+/** A picture, shown once it is read; if it can't be, a note saying so in its place. */
+function picture(src: string, alt: string, view: EditorView): HTMLElement {
+	const box = document.createElement('span');
+	box.className = 'cm-md-picture';
+	const img = box.appendChild(document.createElement('img'));
+	img.alt = alt;
+	const missing = () => {
+		box.textContent = `Couldn’t load ${alt || src}`;
+		box.classList.add('missing');
+	};
+	img.onload = () => view.requestMeasure();
+	img.onerror = missing;
+	view.state
+		.facet(imageLoad)(src)
+		.then((url) => (url ? (img.src = url) : missing()));
+	return box;
+}
+
+class Picture extends WidgetType {
+	constructor(
+		readonly src: string,
+		readonly alt: string
+	) {
+		super();
+	}
+	eq(other: Picture) {
+		return other.src === this.src && other.alt === this.alt;
+	}
+	toDOM(view: EditorView) {
+		return picture(this.src, this.alt, view);
+	}
+	ignoreEvent() {
+		return false;
+	}
+}
 
 function previewDecorations(view: EditorView): DecorationSet {
 	const { state } = view;
@@ -180,6 +237,18 @@ function previewDecorations(view: EditorView): DecorationSet {
 							hide(marks[1].from, node.to);
 						}
 						break;
+					}
+					case 'Image': {
+						// The picture in place of its markdown; with the cursor on it, the markdown and the picture after it.
+						const marks = node.node.getChildren('LinkMark');
+						const url = node.node.getChild('URL');
+						if (marks.length < 2 || !url) break;
+						const src = state.sliceDoc(url.from, url.to);
+						if (!isWebSrc(src) && !(isVaultSrc(src) && state.facet(imageLoad) !== webOnly)) break;
+						const widget = new Picture(src, state.sliceDoc(marks[0].to, marks[1].from));
+						if (touched(node.from, node.to)) found.push(Decoration.widget({ widget, side: 1 }).range(node.to));
+						else found.push(Decoration.replace({ widget }).range(node.from, node.to));
+						return false;
 					}
 					case 'URL':
 						if (parent?.name !== 'Link' && parent?.name !== 'Image') found.push(linkText.range(node.from, node.to));
@@ -262,16 +331,163 @@ const livePreview = ViewPlugin.fromClass(
 	}
 );
 
+// ---- tables --------------------------------------------------------------------------------------
+// In live preview a table is drawn as one, unless the cursor is in it: then its markdown is there to edit. A table
+// takes whole lines, which a view plugin may not replace, so tables come from a state field. The state doesn't know
+// about focus, so the field keeps track of it: an editor without focus draws every table.
+
+const focusChanged = StateEffect.define<boolean>();
+const inSource = Facet.define<boolean, boolean>({ combine: (values) => values.some(Boolean) });
+
+const inlineTags: Record<string, string> = { Emphasis: 'em', StrongEmphasis: 'strong', Strikethrough: 's', InlineCode: 'code' };
+const inlineMarks = new Set(['EmphasisMark', 'StrikethroughMark', 'CodeMark', 'LinkMark']);
+
+function span(cls: string, text = '') {
+	const el = document.createElement('span');
+	el.className = cls;
+	el.textContent = text;
+	return el;
+}
+
+/** The inline markdown of a cell as elements, without its marks; only `from`…`to` of `node`. */
+function inline(text: (from: number, to: number) => string, node: SyntaxNode, into: HTMLElement, view: EditorView, from = node.from, to = node.to) {
+	let pos = from;
+	for (let child = node.firstChild; child; child = child.nextSibling) {
+		if (child.from < from || child.to > to) continue;
+		if (child.from > pos) into.append(text(pos, child.from));
+		pos = child.to;
+		const tag = inlineTags[child.name];
+		const marks = child.getChildren('LinkMark');
+		const url = child.getChild('URL');
+		if (tag) inline(text, child, into.appendChild(document.createElement(tag)), view);
+		else if (child.name === 'Link' && marks.length >= 2 && (url || child.getChild('LinkLabel')))
+			inline(text, child, into.appendChild(span('cm-md-link')), view, marks[0].to, marks[1].from);
+		else if (child.name === 'Image' && marks.length >= 2 && url) into.append(picture(text(url.from, url.to), text(marks[0].to, marks[1].from), view));
+		else if (child.name === 'Link' || child.name === 'Image') into.append(text(child.from, child.to)); // `[words]` in brackets
+		else if (child.name === 'URL') into.append(span('cm-md-link', text(child.from, child.to)));
+		else if (child.name === 'Escape') into.append(text(child.from + 1, child.to));
+		else if (!inlineMarks.has(child.name)) inline(text, child, into, view);
+	}
+	if (to > pos) into.append(text(pos, to));
+}
+
+/** A row's cells in order, null for an empty one. The pipes are TableDelimiter children; a leading one ends no cell. */
+function cells(row: SyntaxNode): (SyntaxNode | null)[] {
+	const found: (SyntaxNode | null)[] = [];
+	let cell: SyntaxNode | null = null;
+	for (let child = row.firstChild; child; child = child.nextSibling) {
+		if (child.name === 'TableCell') cell = child;
+		else if (child.name === 'TableDelimiter') {
+			if (cell || child.from > row.from) found.push(cell);
+			cell = null;
+		}
+	}
+	if (cell) found.push(cell);
+	return found;
+}
+
+/** Column alignments from the delimiter row: `:--` left, `--:` right, `:-:` centred. */
+function alignments(row: string): string[] {
+	return row
+		.trim()
+		.replace(/^\||\|$/g, '')
+		.split('|')
+		.map((spec) => {
+			const s = spec.trim();
+			return s.startsWith(':') ? (s.endsWith(':') ? 'center' : 'left') : s.endsWith(':') ? 'right' : '';
+		});
+}
+
+/** The table in `source` (its lines as written), with the rendered page's table styles (`.md table`). */
+function tableDom(source: string, view: EditorView): HTMLElement {
+	const wrap = document.createElement('div');
+	wrap.className = 'md cm-md-table-widget';
+	const cursor = markdownLanguage.parser.parse(source).cursor();
+	while (cursor.name !== 'Table') if (!cursor.next()) return span('', source);
+	const node = cursor.node;
+	const text = (from: number, to: number) => source.slice(from, to);
+	const delimiter = node.getChild('TableDelimiter');
+	const aligns = delimiter ? alignments(text(delimiter.from, delimiter.to)) : [];
+	const table = wrap.appendChild(document.createElement('table'));
+	let columns = 0;
+	for (let row = node.firstChild; row; row = row.nextSibling) {
+		const header = row.name === 'TableHeader';
+		if (!header && row.name !== 'TableRow') continue;
+		const found = cells(row);
+		if (header) columns = found.length;
+		const tr = (header ? table.createTHead() : (table.tBodies[0] ?? table.createTBody())).insertRow();
+		for (let i = 0; i < columns; i++) {
+			const cell = tr.appendChild(document.createElement(header ? 'th' : 'td'));
+			if (aligns[i]) cell.style.textAlign = aligns[i];
+			if (found[i]) inline(text, found[i]!, cell, view);
+		}
+	}
+	return wrap;
+}
+
+class Table extends WidgetType {
+	constructor(readonly source: string) {
+		super();
+	}
+	eq(other: Table) {
+		return other.source === this.source;
+	}
+	toDOM(view: EditorView) {
+		return tableDom(this.source, view);
+	}
+	ignoreEvent() {
+		return false;
+	}
+}
+
+function tableDecorations(state: EditorState, focused: boolean): DecorationSet {
+	if (state.facet(inSource)) return Decoration.none;
+	const found: Range<Decoration>[] = [];
+	const ranges = focused ? state.selection.ranges : [];
+	syntaxTree(state).iterate({
+		enter: (node) => {
+			if (node.name === 'Table') {
+				const from = state.doc.lineAt(node.from).from;
+				const to = state.doc.lineAt(node.to).to;
+				if (!ranges.some((r) => r.from <= to && r.to >= from)) {
+					found.push(Decoration.replace({ widget: new Table(state.sliceDoc(from, to)), block: true }).range(from, to));
+				}
+				return false;
+			}
+			// Tables are blocks: only what holds blocks is worth looking into.
+			return /^(Document|Blockquote|BulletList|OrderedList|ListItem)$/.test(node.name);
+		}
+	});
+	return Decoration.set(found);
+}
+
+const tables = StateField.define<{ focused: boolean; decorations: DecorationSet }>({
+	create: (state) => ({ focused: false, decorations: tableDecorations(state, false) }),
+	update(value, tr) {
+		let focused = value.focused;
+		for (const effect of tr.effects) if (effect.is(focusChanged)) focused = effect.value;
+		const stale =
+			tr.docChanged ||
+			tr.selection ||
+			focused !== value.focused ||
+			tr.startState.facet(inSource) !== tr.state.facet(inSource) ||
+			syntaxTree(tr.startState) !== syntaxTree(tr.state);
+		return stale ? { focused, decorations: tableDecorations(tr.state, focused) } : value;
+	},
+	provide: (field) => EditorView.decorations.from(field, (value) => value.decorations)
+});
+
 // ---- modes ---------------------------------------------------------------------------------------
 // Live preview, above; or source mode: the markdown exactly as it is, every mark in sight, in the monospace font.
 // Switched in place, so the cursor, the selection and undo carry over.
 
 const mode = new Compartment();
-const sourceMode = EditorView.editorAttributes.of({ class: 'cm-md-source' });
+const sourceMode = [inSource.of(true), EditorView.editorAttributes.of({ class: 'cm-md-source' })];
 const modeExtension = (source: boolean) => (source ? sourceMode : livePreview);
 
+/** Switches between source mode and live preview; it also tells a fresh state (`setState`) whether the editor has focus. */
 export function setSourceMode(view: EditorView, source: boolean) {
-	view.dispatch({ effects: mode.reconfigure(modeExtension(source)) });
+	view.dispatch({ effects: [mode.reconfigure(modeExtension(source)), focusChanged.of(view.hasFocus)] });
 }
 
 // ---- keys ----------------------------------------------------------------------------------------
@@ -323,6 +539,8 @@ export interface MarkdownEditorOptions {
 	spellcheck: boolean;
 	/** Source mode instead of live preview; `setSourceMode` switches it later. */
 	source: boolean;
+	/** Reads the pictures in the vault (`![](chart.png)`); without it, only web pictures are shown. */
+	loadImage?: ImageLoad;
 	/** Enter submits and Shift+Enter starts a new line, as in a chat box; otherwise Ctrl/⌘+Enter submits. */
 	submitOnEnter: boolean;
 	/** Tab indents (lists, mostly) instead of moving to the next field: for full documents. */
@@ -356,6 +574,9 @@ export function markdownEditor(options: MarkdownEditorOptions): Extension {
 		markdown({ base: markdownLanguage }),
 		syntaxHighlighting(highlight),
 		mode.of(modeExtension(options.source)),
+		tables,
+		EditorView.focusChangeEffect.of((_, focusing) => focusChanged.of(focusing)),
+		options.loadImage ? imageLoad.of(options.loadImage) : [],
 		keymap.of([...defaultKeymap, ...historyKeymap]),
 		EditorView.lineWrapping,
 		placeholderText(options.placeholder),

@@ -3,6 +3,7 @@
 	import { EditorState, type Extension } from '@codemirror/state';
 	import { EditorView } from '@codemirror/view';
 	import { markdownEditor, setSourceMode } from '$lib/markdownEditor';
+	import { imageLoader, type ImageBase } from '$lib/vaultImages';
 
 	/**
 	 * Where markdown is written: CodeMirror on the markdown itself, styled like the rendered page (see markdownEditor.ts).
@@ -19,6 +20,7 @@
 		autofocus = false,
 		spellcheck = true,
 		source = false,
+		images,
 		submitOnEnter = false,
 		onsubmit,
 		oncancel,
@@ -36,6 +38,8 @@
 		spellcheck?: boolean;
 		/** Source mode: the raw markdown, every mark shown, instead of the live preview. */
 		source?: boolean;
+		/** Where pictures in the vault are read from; without it, only web pictures are shown. */
+		images?: ImageBase;
 		submitOnEnter?: boolean;
 		onsubmit?: () => void;
 		/** Escape. */
@@ -52,11 +56,13 @@
 
 	onMount(() => {
 		held = value;
+		const pictures = imageLoader(() => images);
 		extensions = markdownEditor({
 			placeholder,
 			label,
 			spellcheck,
 			source,
+			loadImage: images ? pictures.load : undefined,
 			submitOnEnter,
 			tabIndents: variant === 'doc',
 			submit: () => onsubmit?.(),
@@ -74,7 +80,10 @@
 		});
 		view = new EditorView({ parent: host, state: EditorState.create({ doc: value, extensions }) });
 		if (autofocus || focusWhenReady) focus(autofocus);
-		return () => view?.destroy();
+		return () => {
+			view?.destroy();
+			pictures.dispose();
+		};
 	});
 
 	// Changed outside (a note sent, a file reloaded or another one opened): start afresh, so undo can't bring back
