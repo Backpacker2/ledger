@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.8.0 (2026-11-03)
+
+### Features
+
+- **mobile:** deploy the server to a linux box too ([c9caf0c](https://github.com/Backpacker2/ledger/commit/c9caf0cf06820f897128caa7a1a5492951f785ce))
+- **mobile:** deploy the server to a mac at home ([30aec0b](https://github.com/Backpacker2/ledger/commit/30aec0b40484146492f5017b0cddf3220f7afa60))
+- **mobile:** add ledger to a phone's home screen ([eac47e6](https://github.com/Backpacker2/ledger/commit/eac47e6dde5a6ddc1fd99bbbff61d368845bb365))
+- **mobile:** fit the screens to a phone ([cb7c6ae](https://github.com/Backpacker2/ledger/commit/cb7c6aea9a83c5d25b3818be957b9e7968da1358))
+- **mobile:** run the screens in a browser against ledger-server ([7a55d2d](https://github.com/Backpacker2/ledger/commit/7a55d2df0ed33e5d3e5a6cdd4ac6dffd15908a6f))
+- **mobile:** add ledger-server, the commands over http for a phone ([445e25a](https://github.com/Backpacker2/ledger/commit/445e25aa75e74bf98b5b017ea6f21f619c531edf))
+
+### Fixes
+
+- **logs:** report problems to backpacker2/ledger ([8eb9a61](https://github.com/Backpacker2/ledger/commit/8eb9a6111663dd2c871e81c1c6e90e9fe493c061))
+- **mobile:** keep the server's own config when redeploying ([357d96a](https://github.com/Backpacker2/ledger/commit/357d96a2f946b63117358ad9616a0ee81e4fa359))
+- **mobile:** let the whole tailnet in when the login list is empty ([69f6f44](https://github.com/Backpacker2/ledger/commit/69f6f444c59c46e268de9e68f947b9592377d27a))
+
+### Other changes
+
+- let a release be started by hand ([cca10cb](https://github.com/Backpacker2/ledger/commit/cca10cb4c0c1bb20f24fc13a1ee0bb1bd3360fb2))
+- add the updates scope to the commit scopes ([3ec8473](https://github.com/Backpacker2/ledger/commit/3ec847307ed06384659e2d4c67ffb80652d55288))
+- link the releases of backpacker2/ledger ([f5334e3](https://github.com/Backpacker2/ledger/commit/f5334e35a327a7cebc3167d0a225d06c59e3e3eb))
+- **updates:** sign releases with this ledger's own key ([5c5c539](https://github.com/Backpacker2/ledger/commit/5c5c539f36b2c3e4f31c5de35bdb0a4b3711dc94))
+- **mobile:** build ledger-server without tauri ([097eb52](https://github.com/Backpacker2/ledger/commit/097eb52bfd06f1345077034da8de176ef96fa695))
+- **mobile:** test the server feature too ([0cb0d11](https://github.com/Backpacker2/ledger/commit/0cb0d118cfcbbd5bb60aafb4904d245e5ed64e59))
+- **mobile:** let the commands run without the desktop window ([8f1e852](https://github.com/Backpacker2/ledger/commit/8f1e852df149e61b5dfb10c732b93b0ebf13ad10))
+
 ## 0.7.0 (2026-11-03)
 
 ### Features
