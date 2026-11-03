@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
+	import BookOpen from '@lucide/svelte/icons/book-open';
+	import CodeXml from '@lucide/svelte/icons/code-xml';
+	import PencilLine from '@lucide/svelte/icons/pencil-line';
 	import { goto } from '$app/navigation';
 	import FeedbackCard from '$lib/components/FeedbackCard.svelte';
 	import FileImage from '$lib/components/FileImage.svelte';
@@ -90,11 +93,19 @@
 
 	// ---- view mode -----------------------------------------------------------------------------
 
-	type Mode = 'write' | 'preview' | 'split';
-	let mode = $state<Mode>('split');
+	// As in Obsidian: the raw markdown, the live preview (marks hidden away from the cursor), or the rendered page.
+	type Mode = 'source' | 'live' | 'reading';
+	const modes: { id: Mode; label: string; icon: typeof BookOpen }[] = [
+		{ id: 'source', label: 'Source', icon: CodeXml },
+		{ id: 'live', label: 'Live preview', icon: PencilLine },
+		{ id: 'reading', label: 'Reading', icon: BookOpen }
+	];
+	let mode = $state<Mode>('live');
 	try {
+		// The modes before these: Write and Split were editors, Preview was reading.
 		const saved = localStorage.getItem('ledger-doc-mode');
-		if (saved === 'write' || saved === 'preview' || saved === 'split') mode = saved;
+		if (saved === 'source' || saved === 'live' || saved === 'reading') mode = saved;
+		else if (saved === 'preview') mode = 'reading';
 	} catch {
 		// Storage unavailable: the default is fine.
 	}
@@ -310,23 +321,28 @@
 			<div class="doc-view"><Markdown html={doc.html ?? ''} /></div>
 		{:else if isMarkdown}
 			<div class="form-row" style="justify-content:space-between">
-				<div class="seg" role="group" aria-label="Editor view">
-					<button class:on={mode === 'write'} onclick={() => setMode('write')}>Write</button>
-					<button class:on={mode === 'split'} onclick={() => setMode('split')}>Split</button>
-					<button class:on={mode === 'preview'} onclick={() => setMode('preview')}>Preview</button>
+				<div class="seg" role="group" aria-label="View">
+					{#each modes as m (m.id)}
+						<button class:on={mode === m.id} aria-pressed={mode === m.id} onclick={() => setMode(m.id)}><m.icon size={14} />{m.label}</button>
+					{/each}
 				</div>
 				<span class="hint">Last changed {ago(doc.modified)}. Changes save automatically.</span>
 			</div>
-			<div class="editor-split" class:both={mode === 'split'}>
-				{#if mode !== 'preview'}
-					<MarkdownEditor bind:value={body} variant="doc" minHeight="58vh" label={doc.name} placeholder="Write it in markdown…" oninput={edited} />
-				{/if}
-				{#if mode !== 'write'}
-					<div class="doc-view">
-						{#if body.trim()}<Markdown {html} />{:else}<span class="hint">Nothing to preview yet.</span>{/if}
-					</div>
-				{/if}
-			</div>
+			{#if mode === 'reading'}
+				<div class="doc-view">
+					{#if body.trim()}<Markdown {html} />{:else}<span class="hint">Nothing here yet.</span>{/if}
+				</div>
+			{:else}
+				<MarkdownEditor
+					bind:value={body}
+					variant="doc"
+					minHeight="58vh"
+					label={doc.name}
+					placeholder="Write it in markdown…"
+					source={mode === 'source'}
+					oninput={edited}
+				/>
+			{/if}
 		{:else if doc.kind === 'image'}
 			<div class="doc-view" style="display:grid;place-items:center">
 				<FileImage {project} path={file} alt={doc.name} cls="shot-preview" />

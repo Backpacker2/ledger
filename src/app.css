@@ -348,15 +348,16 @@ mark { background: var(--highlight); color: inherit; border-radius: 3px; padding
 .title-input:hover { border-color: var(--line); }
 .title-input:focus { outline: none; border-color: var(--accent); background: var(--bg); }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg button { background: var(--card); border: 0; color: var(--muted); padding: 7px 12px; font-size: 12px; font-weight: 600; }
+.seg button {
+	background: var(--card); border: 0; color: var(--muted); padding: 7px 12px; font-size: 12px; font-weight: 600;
+	display: inline-flex; align-items: center; gap: 6px;
+}
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: var(--accent); color: var(--accent-ink); }
 .version-strip { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .vchip { border: 1px solid var(--line); background: var(--card-2); color: var(--muted); border-radius: 999px; padding: 3px 10px; font-size: 12px; text-decoration: none; }
 .vchip:hover { border-color: var(--accent); }
 .vchip.on { border-color: var(--accent); color: var(--ink); background: var(--accent-soft); }
-.editor-split { display: grid; gap: 16px; grid-template-columns: 1fr; }
-.editor-split.both { grid-template-columns: 1fr 1fr; }
 .doc-view { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 22px; min-height: 40vh; }
 .save-state { font-size: 12px; color: var(--faint); }
 
@@ -471,7 +472,6 @@ mark { background: var(--highlight); color: inherit; border-radius: 3px; padding
 	.md-editor, input, select { font-size: 16px; }
 	.doc-row, .doc-row.all { grid-template-columns: 1fr auto; row-gap: 4px; }
 	.doc-row .doc-date, .doc-row .doc-space, .doc-row .badge.type { display: none; }
-	.editor-split.both { grid-template-columns: 1fr; }
 	.col { flex-basis: 82vw; }
 	.story-row { grid-template-columns: 60px 1fr auto; }
 	.story-row .k-meta { display: none; }

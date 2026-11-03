@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { EditorState, type Extension } from '@codemirror/state';
 	import { EditorView } from '@codemirror/view';
-	import { markdownEditor } from '$lib/markdownEditor';
+	import { markdownEditor, setSourceMode } from '$lib/markdownEditor';
 
 	/**
 	 * Where markdown is written: CodeMirror on the markdown itself, styled like the rendered page (see markdownEditor.ts).
@@ -18,6 +18,7 @@
 		minHeight,
 		autofocus = false,
 		spellcheck = true,
+		source = false,
 		submitOnEnter = false,
 		onsubmit,
 		oncancel,
@@ -33,6 +34,8 @@
 		minHeight?: string;
 		autofocus?: boolean;
 		spellcheck?: boolean;
+		/** Source mode: the raw markdown, every mark shown, instead of the live preview. */
+		source?: boolean;
 		submitOnEnter?: boolean;
 		onsubmit?: () => void;
 		/** Escape. */
@@ -53,6 +56,7 @@
 			placeholder,
 			label,
 			spellcheck,
+			source,
 			submitOnEnter,
 			tabIndents: variant === 'doc',
 			submit: () => onsubmit?.(),
@@ -81,6 +85,12 @@
 		held = next;
 		const head = Math.min(view.state.selection.main.head, next.length);
 		view.setState(EditorState.create({ doc: next, selection: { anchor: head }, extensions }));
+		setSourceMode(view, untrack(() => source));
+	});
+
+	$effect(() => {
+		const next = source;
+		if (view) setSourceMode(view, next);
 	});
 
 	/** Focuses the editor, now or as soon as it exists; `atEnd` puts the cursor after the text. */

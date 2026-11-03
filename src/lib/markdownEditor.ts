@@ -1,11 +1,12 @@
 // The markdown editor: CodeMirror 6 editing the markdown itself, so what you type is exactly what lands in the
 // vault. It reads like the rendered page: headings are big, bold is bold, and the marks around them (#, **, `,
-// [](…)) fade away except where the cursor is, so they can still be edited. MarkdownEditor.svelte wraps it.
+// [](…)) fade away except where the cursor is, so they can still be edited. Source mode shows them all instead.
+// MarkdownEditor.svelte wraps it.
 
 import { defaultKeymap, history, historyKeymap, indentLess, indentMore } from '@codemirror/commands';
 import { insertNewlineContinueMarkup, markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
-import { EditorSelection, EditorState, Prec, type Extension, type Range, type StateCommand } from '@codemirror/state';
+import { Compartment, EditorSelection, EditorState, Prec, type Extension, type Range, type StateCommand } from '@codemirror/state';
 import {
 	Decoration,
 	drawSelection,
@@ -56,7 +57,8 @@ const theme = EditorView.theme({
 	'.cm-md-code': { backgroundColor: 'var(--card-2)', borderRadius: '4px', padding: '1px 3px' },
 	'.cm-md-link': { color: 'var(--accent)', textDecoration: 'underline', textDecorationColor: 'var(--accent-soft)', textUnderlineOffset: '2px' },
 	'.cm-md-bullet': { color: 'var(--muted)', padding: '0 4px 0 2px' },
-	'.cm-md-task': { margin: '0 6px 0 0', verticalAlign: '-2px', accentColor: 'var(--accent)', cursor: 'pointer' }
+	'.cm-md-task': { margin: '0 6px 0 0', verticalAlign: '-2px', accentColor: 'var(--accent)', cursor: 'pointer' },
+	'&.cm-md-source .cm-scroller': { fontFamily: 'var(--font-mono)', fontSize: '13px' }
 });
 
 // ---- live preview ------------------------------------------------------------------------------
@@ -260,6 +262,18 @@ const livePreview = ViewPlugin.fromClass(
 	}
 );
 
+// ---- modes ---------------------------------------------------------------------------------------
+// Live preview, above; or source mode: the markdown exactly as it is, every mark in sight, in the monospace font.
+// Switched in place, so the cursor, the selection and undo carry over.
+
+const mode = new Compartment();
+const sourceMode = EditorView.editorAttributes.of({ class: 'cm-md-source' });
+const modeExtension = (source: boolean) => (source ? sourceMode : livePreview);
+
+export function setSourceMode(view: EditorView, source: boolean) {
+	view.dispatch({ effects: mode.reconfigure(modeExtension(source)) });
+}
+
 // ---- keys ----------------------------------------------------------------------------------------
 
 /** Wraps each selection in `mark`, or unwraps it when it already is; with nothing selected, the cursor lands inside a pair. */
@@ -307,6 +321,8 @@ export interface MarkdownEditorOptions {
 	/** The accessible name; the visible label sits outside the editor. */
 	label?: string;
 	spellcheck: boolean;
+	/** Source mode instead of live preview; `setSourceMode` switches it later. */
+	source: boolean;
 	/** Enter submits and Shift+Enter starts a new line, as in a chat box; otherwise Ctrl/⌘+Enter submits. */
 	submitOnEnter: boolean;
 	/** Tab indents (lists, mostly) instead of moving to the next field: for full documents. */
@@ -339,7 +355,7 @@ export function markdownEditor(options: MarkdownEditorOptions): Extension {
 		drawSelection(),
 		markdown({ base: markdownLanguage }),
 		syntaxHighlighting(highlight),
-		livePreview,
+		mode.of(modeExtension(options.source)),
 		keymap.of([...defaultKeymap, ...historyKeymap]),
 		EditorView.lineWrapping,
 		placeholderText(options.placeholder),
