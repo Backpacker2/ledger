@@ -170,6 +170,8 @@ pnpm run check         # Svelte + TypeScript
 
 Environment variables, mostly for development: `LEDGER_VAULT` fixes the vault location (and locks it in Settings); `LEDGER_CONFIG_DIR` moves the per-machine settings (the vault location, whether to check for updates); `LEDGER_GITHUB_API` points the sync at another API base (GitHub Enterprise, or a mock).
 
+To send a change, read [CONTRIBUTING.md](CONTRIBUTING.md): the checks, and how to write the commits.
+
 ## Versions and releases
 
 Every push to `main` that brings [conventional commits](https://www.conventionalcommits.org) is released by CI
@@ -181,6 +183,10 @@ the largest one wins:
 | a breaking change: `feat!:`, `fix(sync)!:`, or a `BREAKING CHANGE:` footer | major | 0.4.2 → 1.0.0 |
 | `feat:` | minor | 0.4.2 → 0.5.0 |
 | any other type: `fix`, `perf`, `refactor`, `docs`, `style`, `test`, `build`, `ci`, `chore`, `revert` | patch | 0.4.2 → 0.4.3 |
+
+Changes reach `main` as pull requests merged with a merge commit, so every commit on a branch lands as it is and
+counts (merge commits don't); [CONTRIBUTING.md](CONTRIBUTING.md) lists the types and scopes a commit may use, and a
+check holds every commit in a pull request to them.
 
 Commits that aren't conventional are left out; with none that count, there is no release. The version is written to
 `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `Cargo.lock` (the app shows the Cargo one), the
@@ -212,6 +218,8 @@ src/                     SvelteKit frontend (static SPA)
   lib/components/        sidebar tree, post/prompt/feedback/upload cards, composer, modals, hotkey recorder …
   routes/screenshot-overlay  the built-in capture's region picker (its own window; not used on Linux)
 scripts/release.mjs      the next version from the conventional commits (run by CI)
+scripts/check-commits.mjs  checks every commit in a pull request against CONTRIBUTING.md (run by CI)
+scripts/conventional.mjs what counts as a conventional commit, shared by both
 src-tauri/src/
   schema.sql             the in-memory database's shape and rules
   projects.rs threads.rs posts.rs prompts.rs feedback.rs uploads.rs deliverables.rs templates.rs

@@ -64,6 +64,21 @@ fix(sync)!: store the token per vault          (footer: BREAKING CHANGE: re-ente
 style(ui): align the icon buttons
 build: move to Node 26
 ```
+**Before committing or opening a pull request, follow [CONTRIBUTING.md](CONTRIBUTING.md)**: the checks to run, and the
+conventional-commit types and scopes for every commit message.
+
+## Commits and pull requests
+
+- Pull requests are merged with a merge commit: every commit on the branch lands on `main` as it is and goes into the
+  release notes. So every commit you make is a conventional commit with one concern. The PR title and description
+  don't count for the release.
+- Check the branch's commits, and see which release they make, with `node scripts/check-commits.mjs`
+  (`origin/main..HEAD`). Check a message before committing with `--message "<subject>" [--body-file <file>]`. CI runs
+  the same check on every pull request.
+- A breaking change needs a `!` and a `BREAKING CHANGE:` footer in that commit's own message.
+- To fix a message on a branch that isn't merged yet, amend the last commit, or recreate the commits in order
+  (`git reset --soft origin/main`, then commit again) when there's no interactive rebase. Then the branch needs a
+  force push with lease, which is the user's call.
 
 ## Versions and releases are automatic: don't do them by hand
 
@@ -79,15 +94,10 @@ So, as an agent:
 
 - Never edit a version number, `CHANGELOG.md`, or create `v*` tags or `chore(release)` commits; CI owns them.
   A version changed by hand would be overwritten or skew the next bump.
-- After pushing, `main` on GitHub gets one more commit (the release). Pull before pushing again.
-- To see what your commits will release before pushing: `pnpm release:preview` (changes nothing).
-
-## Before you commit
-
-```bash
-pnpm run check   # Svelte + TypeScript
-pnpm test        # Rust tests
-```
+- After a pull request is merged, `main` on GitHub gets the merge commit and then CI's release commit. Start new work
+  from a freshly fetched `origin/main`.
+- What counts as conventional lives in [scripts/conventional.mjs](scripts/conventional.mjs), shared by the release and
+  the commits check; the scopes live in the table in CONTRIBUTING.md. Change them there, not in a copy.
 
 ## Look and brand
 
