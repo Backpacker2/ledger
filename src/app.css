@@ -56,6 +56,9 @@
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
+/* The window never scrolls (or bounces) as a whole: only the panes inside it do, and they don't hand their scrolling on. */
+html, body { overflow: hidden; overscroll-behavior: none; }
+.sidebar, .page, .thread, .board, .col-cards, .modal-body, .link-grid { overscroll-behavior: contain; }
 body {
 	display: flex;
 	background: var(--bg);
@@ -369,12 +372,13 @@ mark { background: rgba(224, 166, 69, 0.35); color: inherit; border-radius: 3px;
 .kv dd { margin: 0; word-break: break-all; }
 
 /* ---------- modal, toasts ---------- */
-.modal-scrim { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.5); display: grid; place-items: center; padding: 20px; }
+.modal-scrim { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.5); display: grid; grid-template-rows: minmax(0, 1fr); place-items: center; padding: 20px; }
 .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: min(560px, 100%); max-height: 100%; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45); }
 .modal.wide { width: min(720px, 100%); }
 .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px 0; }
 .modal-head h2 { font-size: 16px; }
-.modal-body { padding: 14px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.modal-body { padding: 14px 20px; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+.modal-body > * { flex-shrink: 0; }
 .modal-foot { padding: 0 20px 18px; display: flex; gap: 8px; align-items: center; }
 .modal-foot .spacer-h { flex: 1; }
 .link-grid { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; }
