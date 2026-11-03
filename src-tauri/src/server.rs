@@ -524,6 +524,13 @@ fn router(shared: Shared, static_dir: Option<PathBuf>) -> Router {
         .with_state(shared)
 }
 
+/// The Tailscale logins let in, from `LEDGER_ALLOWED_LOGINS`. Empty (or only commas and spaces) means no list:
+/// everyone who can reach the server on the tailnet, not no one.
+fn allowed_logins(list: &str) -> Option<Vec<String>> {
+    let logins: Vec<String> = list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+    (!logins.is_empty()).then_some(logins)
+}
+
 fn default_config_dir() -> PathBuf {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
@@ -561,14 +568,7 @@ fn run() -> std::result::Result<(), String> {
     {
         return Err(format!("LEDGER_STATIC has no index.html: {}", dir.display()));
     }
-    let allowed_logins = std::env::var("LEDGER_ALLOWED_LOGINS").ok().map(|list| {
-        Arc::new(
-            list.split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>(),
-        )
-    });
+    let allowed_logins = allowed_logins(&std::env::var("LEDGER_ALLOWED_LOGINS").unwrap_or_default()).map(Arc::new);
 
     let (events, _) = broadcast::channel::<(&'static str, Value)>(256);
     let log_events = events.clone();
@@ -682,6 +682,13 @@ mod tests {
             .filter(|c| !registered.contains(c))
             .collect();
         assert!(unknown.is_empty(), "not registered by the desktop app: {unknown:?}");
+    }
+
+    #[test]
+    fn an_empty_login_list_lets_the_tailnet_in() {
+        assert_eq!(allowed_logins(""), None);
+        assert_eq!(allowed_logins(" , "), None);
+        assert_eq!(allowed_logins("me@example.com, you@example.com"), Some(vec!["me@example.com".into(), "you@example.com".into()]));
     }
 
     #[test]
