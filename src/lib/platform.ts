@@ -13,6 +13,9 @@ export const desktop = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in
 /** True in a browser served by `ledger-server`. */
 export const web = typeof window !== 'undefined' && !desktop;
 
+/** A touch screen (a phone, a tablet): no hover, and an on-screen keyboard where Enter means a new line. */
+export const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true;
+
 /** Thrown for something only the desktop app can do. */
 export class DesktopOnly extends Error {
 	constructor(what = 'This') {

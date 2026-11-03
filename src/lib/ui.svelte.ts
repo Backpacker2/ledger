@@ -176,10 +176,16 @@ export function startBackendEvents(): () => void {
 		}
 	};
 	window.addEventListener('focus', onFocus);
+	// A phone doesn't focus a window: the app comes back to the front (from the home screen, or a locked phone).
+	const onVisible = () => {
+		if (document.visibilityState === 'visible') void onFocus();
+	};
+	document.addEventListener('visibilitychange', onVisible);
 
 	return () => {
 		alive = false;
 		window.removeEventListener('focus', onFocus);
+		document.removeEventListener('visibilitychange', onVisible);
 		cleanups.forEach((fn) => fn());
 	};
 }

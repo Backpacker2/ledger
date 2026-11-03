@@ -1,6 +1,6 @@
 <script lang="ts">
 	import X from '@lucide/svelte/icons/x';
-	import { pickFiles as pick, type Picked } from '$lib/platform';
+	import { pickFiles as pick, touch, type Picked } from '$lib/platform';
 	import { api } from '$lib/api';
 	import { plainText, time } from '$lib/format';
 	import { attempt, refresh } from '$lib/ui.svelte';
@@ -79,8 +79,8 @@
 			variant="composer"
 			rows={1}
 			label="Note"
-			placeholder="Write a note… markdown works (Enter saves, Shift+Enter adds a line)"
-			submitOnEnter
+			placeholder={touch ? 'Write a note… markdown works' : 'Write a note… markdown works (Enter saves, Shift+Enter adds a line)'}
+			submitOnEnter={!touch}
 			onsubmit={send}
 			oncancel={replyTo ? oncancelreply : undefined}
 		/>

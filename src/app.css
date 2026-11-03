@@ -736,3 +736,33 @@ select.pv-level { padding: 2px 6px; font-size: 11.5px; border-radius: 8px; width
 .dd-option .dd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dd-option.active { background: var(--card-2); }
 .dd-option.selected { color: var(--accent); font-weight: 600; }
+
+/* ---------- phones: the mobile version, served by ledger-server ---------- */
+.search-page-form { margin-top: 12px; max-width: 520px; }
+.search-page-form input { width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }
+.topbar .spacer-h { flex: 1; }
+.topbar-home { display: inline-flex; align-items: center; color: inherit; }
+.topbar a.icon-btn { display: inline-flex; align-items: center; color: var(--side-ink); }
+
+/* No hover on a touch screen: what a hover reveals is always there. */
+@media (hover: none) {
+	.k-arrows, .pin-btn { opacity: 1; }
+}
+
+@media (max-width: 760px) {
+	/* Under the notch and above the home bar, when added to the home screen (viewport-fit=cover in app.html). */
+	.topbar { padding-top: calc(8px + env(safe-area-inset-top)); padding-left: calc(12px + env(safe-area-inset-left)); padding-right: calc(12px + env(safe-area-inset-right)); }
+	.sidebar { padding-top: calc(20px + env(safe-area-inset-top)); padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+	.composer { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+	.page, .thread { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+	.board { padding-bottom: calc(20px + env(safe-area-inset-bottom)); scroll-snap-type: x mandatory; }
+	.side-window { padding-top: calc(16px + env(safe-area-inset-top)); padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
+	/* Fingers, not a pointer: small text buttons get room to be hit. */
+	.link { padding: 6px 2px; font-size: 13px; }
+	.btn.small { padding-top: 6px; padding-bottom: 6px; }
+	/* Text fields at 16px, or iOS zooms the page in when one is tapped. */
+	textarea, input[type='search'], .cm-content { font-size: 16px; }
+	/* The window never needs to be wider than the phone. */
+	.page-inner, .thread-inner { min-width: 0; }
+	.md img, .md video { max-width: 100%; height: auto; }
+}

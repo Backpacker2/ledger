@@ -1,9 +1,21 @@
 <script lang="ts">
 	import { deliverableUrl, threadUrl } from '$lib/actions';
 	import { dateTime, highlight, plural } from '$lib/format';
+	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	// A box of its own on the page: on a phone the sidebar's is tucked away in the menu.
+	let query = $state('');
+	$effect(() => {
+		query = data.q;
+	});
+	function search(e: SubmitEvent) {
+		e.preventDefault();
+		const q = query.trim();
+		if (q) goto(`/search?q=${encodeURIComponent(q)}`);
+	}
 
 	type Hit = PageData['hits'][number];
 
@@ -26,11 +38,15 @@
 				{#if data.q}
 					{plural(data.hits.length, 'result')} for “{data.q}”
 				{:else}
-					Type in the search box on the left.
+					Every post, prompt, feedback and deliverable.
 				{/if}
 			</div>
 		</div>
 	</div>
+	<form class="search-page-form" onsubmit={search} role="search">
+		<!-- svelte-ignore a11y_autofocus -->
+		<input type="search" placeholder="Search everything…" autocomplete="off" spellcheck="false" enterkeyhint="search" bind:value={query} autofocus={!data.q} aria-label="Search" />
+	</form>
 </div>
 
 <div class="page">
