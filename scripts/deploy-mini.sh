@@ -106,8 +106,9 @@ fi
 
 say "Copying to $HOST:$REMOTE_DIR"
 remote "mkdir -p $REMOTE_DIR $REMOTE_VAULT"
-# The settings file there is kept: it is written below only the first time.
-rsync -az --delete --exclude ledger-server.env --exclude logs -e "ssh ${SSH_OPTS[*]}" "$BUNDLE/" "$HOST:$REMOTE_DIR/"
+# What lives only there is kept: the settings file (written below the first time), the logs and the per-machine
+# config (LEDGER_CONFIG_DIR, with its own log). Anchored, so only those at the top are spared.
+rsync -az --delete --exclude /ledger-server.env --exclude /logs/ --exclude /config/ -e "ssh ${SSH_OPTS[*]}" "$BUNDLE/" "$HOST:$REMOTE_DIR/"
 
 say "Writing the settings"
 remote "bash -s" <<EOF
