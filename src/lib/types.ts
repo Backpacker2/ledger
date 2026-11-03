@@ -500,6 +500,8 @@ export interface ClaudeCodeSettings {
 	model: string;
 	/** Extra guard rails: ignore the project's own Claude settings, and refuse reads and writes outside the project. */
 	confine: boolean;
+	/** A prompt that is created starts running at once, without the confirmation. */
+	autoRun: boolean;
 	/** The program that would be run, when it can be found. */
 	resolvedPath: string | null;
 	/** Why it can't be found. */

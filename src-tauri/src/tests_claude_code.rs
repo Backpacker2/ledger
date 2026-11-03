@@ -358,13 +358,14 @@ fn without_a_settings_file_the_defaults_apply() {
     assert_eq!(settings, ClaudeSettings::default());
     assert_eq!(settings.permission_mode, PermissionMode::AcceptEdits);
     assert!(settings.confine);
+    assert!(!settings.auto_run, "a prompt is only run by itself when it was asked for");
     assert!(settings.cli_path.is_empty() && settings.model.is_empty());
 }
 
 #[test]
 fn settings_persist_in_the_ledger_folder_which_git_ignores() {
     let dir = tempdir().unwrap();
-    let saved = ClaudeSettings::validated(" \"C:\\Program Files\\Claude\\claude.exe\" ", "plan", " claude-sonnet-4-5 ", false).unwrap();
+    let saved = ClaudeSettings::validated(" \"C:\\Program Files\\Claude\\claude.exe\" ", "plan", " claude-sonnet-4-5 ", false, true).unwrap();
     assert_eq!(saved.cli_path, "C:\\Program Files\\Claude\\claude.exe", "pasted quotes are dropped");
     config::save(dir.path(), &saved).unwrap();
 
@@ -372,6 +373,10 @@ fn settings_persist_in_the_ledger_folder_which_git_ignores() {
     assert!(config::settings_path(dir.path()).is_file());
     assert_eq!(config::load(dir.path()), saved);
     assert_eq!(config::load(dir.path()).permission_mode, PermissionMode::Plan);
+    assert!(config::load(dir.path()).auto_run, "running a prompt when it is created is remembered");
+    assert!(fs::read_to_string(config::settings_path(dir.path())).unwrap().contains("\"autoRun\": true"));
+    config::save(dir.path(), &ClaudeSettings { auto_run: false, ..saved }).unwrap();
+    assert!(!config::load(dir.path()).auto_run);
 
     // `.ledger/` is what the vault's .gitignore lists, so the file is neither committed nor synced.
     let ignore = fs::read_to_string(dir.path().join(".gitignore")).unwrap();
@@ -390,7 +395,7 @@ fn an_old_or_damaged_settings_file_loads_field_by_field() {
     write(r#"{"cliPath": "/opt/claude/bin/claude"}"#);
     let old = config::load(dir.path());
     assert_eq!(old.cli_path, "/opt/claude/bin/claude");
-    assert_eq!((old.permission_mode, old.model.as_str(), old.confine), (PermissionMode::AcceptEdits, "", true));
+    assert_eq!((old.permission_mode, old.model.as_str(), old.confine, old.auto_run), (PermissionMode::AcceptEdits, "", true, false));
 
     // Not JSON, empty, or not an object at all.
     for broken in ["", "{", "not json", "[1, 2]", "42", "null"] {
@@ -399,9 +404,10 @@ fn an_old_or_damaged_settings_file_loads_field_by_field() {
     }
 
     // One bad field doesn't spoil the others, and unknown fields are ignored.
-    write(r#"{"cliPath": 5, "model": "opus", "permissionMode": ["x"], "confine": "yes", "somethingNew": {"a": 1}}"#);
+    write(r#"{"cliPath": 5, "model": "opus", "permissionMode": ["x"], "confine": "yes", "autoRun": "yes", "somethingNew": {"a": 1}}"#);
     let mixed = config::load(dir.path());
     assert_eq!((mixed.cli_path.as_str(), mixed.model.as_str(), mixed.permission_mode, mixed.confine), ("", "opus", PermissionMode::AcceptEdits, true));
+    assert!(!mixed.auto_run, "anything but a real true leaves it off");
 
     // A hand-edited file can't switch the permission checks off, or put an option in as the model.
     write(r#"{"permissionMode": "bypassPermissions", "model": "--dangerously-skip-permissions"}"#);
@@ -413,17 +419,17 @@ fn an_old_or_damaged_settings_file_loads_field_by_field() {
 #[test]
 fn what_is_typed_in_settings_is_checked_because_it_reaches_the_command_line() {
     for fine in ["sonnet", "opus", "claude-sonnet-4-5", "claude-opus-4-1-20250805", "sonnet[1m]", "us.anthropic.claude-sonnet-4-5-v1:0"] {
-        assert!(ClaudeSettings::validated("", "acceptEdits", fine, true).is_ok(), "{fine}");
+        assert!(ClaudeSettings::validated("", "acceptEdits", fine, true, false).is_ok(), "{fine}");
     }
     let too_long = "m".repeat(101);
     for bad in ["--dangerously-skip-permissions", "-p", "two words", "a&b", "%PATH%", "\"quoted\"", "x\ny", "a;b", "$(id)", "é", too_long.as_str()] {
-        assert!(ClaudeSettings::validated("", "acceptEdits", bad, true).is_err(), "{bad:?}");
+        assert!(ClaudeSettings::validated("", "acceptEdits", bad, true, false).is_err(), "{bad:?}");
     }
     for mode in ["bypassPermissions", "default", "auto", "", "AcceptEdits", "--dangerously-skip-permissions"] {
-        assert!(ClaudeSettings::validated("", mode, "", true).is_err(), "{mode:?}");
+        assert!(ClaudeSettings::validated("", mode, "", true, false).is_err(), "{mode:?}");
     }
-    assert!(ClaudeSettings::validated("a\nb", "plan", "", true).is_err());
-    assert_eq!(ClaudeSettings::validated("", "dontAsk", "", true).unwrap().permission_mode, PermissionMode::DontAsk);
+    assert!(ClaudeSettings::validated("a\nb", "plan", "", true, false).is_err());
+    assert_eq!(ClaudeSettings::validated("", "dontAsk", "", true, false).unwrap().permission_mode, PermissionMode::DontAsk);
 }
 
 // ---- the command line ---------------------------------------------------------------------------------
@@ -433,7 +439,7 @@ fn the_command_line_is_a_fixed_set_of_flags_and_the_chosen_values() {
     let plain = ClaudeSettings { confine: false, ..Default::default() };
     assert_eq!(cli::run_args(&plain, None), os(&["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits"]));
 
-    let all = ClaudeSettings { permission_mode: PermissionMode::Plan, model: "opus".into(), confine: true, cli_path: String::new() };
+    let all = ClaudeSettings { permission_mode: PermissionMode::Plan, model: "opus".into(), confine: true, cli_path: String::new(), auto_run: true };
     assert_eq!(
         cli::run_args(&all, Some(Path::new("/vault/.ledger/runs/claude-guard.json"))),
         os(&[
@@ -460,7 +466,7 @@ fn no_combination_of_settings_can_skip_the_permission_checks() {
     for mode in [PermissionMode::AcceptEdits, PermissionMode::Plan, PermissionMode::DontAsk] {
         for model in ["", "sonnet"] {
             for confine in [false, true] {
-                let settings = ClaudeSettings { permission_mode: mode, model: model.into(), confine, cli_path: String::new() };
+                let settings = ClaudeSettings { permission_mode: mode, model: model.into(), confine, cli_path: String::new(), auto_run: false };
                 let args = cli::run_args(&settings, confine.then(|| Path::new("guard.json")));
                 for arg in &args {
                     let arg = arg.to_string_lossy();

@@ -5,7 +5,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { claudeCodeApi } from './api';
 import { toast } from './ui.svelte';
-import type { ClaudeRun, ClaudeRunEvent } from './types';
+import type { ClaudeRun, ClaudeRunEvent, Prompt } from './types';
 
 export interface TrackedRun {
 	run: ClaudeRun;
@@ -90,6 +90,29 @@ export function ensureClaudeRuns() {
 /** A run that was just started: shown at once, before its first event arrives. */
 export function trackRun(run: ClaudeRun) {
 	adopt(run, '');
+}
+
+/**
+ * Starts the run of a prompt that was just created, when the setting asks for it, without the confirmation. It never
+ * stops the creation: if the run can't start, the prompt is there and the toast says why.
+ */
+export async function autoRunNewPrompt(project: string, thread: string, prompt: Prompt) {
+	let settings;
+	try {
+		settings = await claudeCodeApi.settings();
+	} catch {
+		return;
+	}
+	if (!settings.autoRun) return;
+	ensureClaudeRuns();
+	const title = `“${prompt.title || 'prompt'}”`;
+	try {
+		const shown = await claudeCodeApi.preview(project, thread, prompt.id);
+		trackRun(await claudeCodeApi.start(project, thread, prompt.id, shown.prompt));
+		toast(`Started ${title} in Claude Code`);
+	} catch (e) {
+		toast(`${title} was created, but Claude Code didn’t start: ${e instanceof Error ? e.message : String(e)}`, true);
+	}
 }
 
 /** The latest run of a prompt, still running or not. */
