@@ -226,7 +226,7 @@ select { color: var(--ink); background: var(--bg); border: 1px solid var(--line)
 .check input { accent-color: var(--accent); width: 16px; height: 16px; }
 .hint { color: var(--faint); font-size: 12px; }
 .mono { font-family: var(--font-mono); font-size: 12px; }
-.row-end { display: flex; justify-content: flex-end; gap: 8px; }
+.row-end { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
 
 .notice { background: var(--amber-soft); color: var(--amber); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
@@ -480,7 +480,8 @@ details.more[open] > summary { margin-bottom: 8px; }
 details.more > :not(summary) + :not(summary) { margin-top: 8px; }
 details.more p { margin: 0; }
 .settings-search { position: relative; width: 260px; max-width: 100%; }
-.settings-search input { width: 100%; padding-left: 30px; }
+.settings-search input { width: 100%; padding: 7px 10px 7px 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); }
+.settings-search input:focus { outline: none; border-color: var(--accent); }
 .settings-search .lucide-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
 .settings-group-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 4px 4px -8px; }
 .yell-error { font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
@@ -765,4 +766,19 @@ select.pv-level { padding: 2px 6px; font-size: 11.5px; border-radius: 8px; width
 	/* The window never needs to be wider than the phone. */
 	.page-inner, .thread-inner { min-width: 0; }
 	.md img, .md video { max-width: 100%; height: auto; }
+}
+
+/* iOS draws its own magnifier (and clear button) in a search field: the app's own icon is already there. */
+input[type='search'] { -webkit-appearance: none; appearance: none; }
+input[type='search']::-webkit-search-decoration { -webkit-appearance: none; }
+
+@media (max-width: 760px) {
+	/* The settings tabs fit the width of a phone: label only, a little less padding. */
+	.tabs .tab { padding-left: 8px; padding-right: 8px; }
+	.tabs .settings-tab svg { display: none; }
+	.settings-search { width: 100%; }
+	/* Long buttons wrap instead of running off the card. */
+	.panel .btn { max-width: 100%; white-space: normal; }
+	.panel, .panel > * { min-width: 0; }
+	.kv { grid-template-columns: 90px 1fr; }
 }
