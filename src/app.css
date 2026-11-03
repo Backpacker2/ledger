@@ -215,13 +215,12 @@ details[open] > summary .disclosure { transform: rotate(90deg); }
 
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 500; }
 .field.grow { flex: 1; min-width: 160px; }
-.field input, .field select, .field textarea, select.inline {
+.field input, .field select, select.inline {
 	padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); min-width: 150px; width: 100%;
 }
-.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--accent); }
-.field input, .field select, .field textarea { font-weight: 400; }
+.field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+.field input, .field select { font-weight: 400; }
 .field input[type='checkbox'], .field input[type='radio'] { width: auto; min-width: 0; padding: 0; }
-.field textarea { resize: vertical; min-height: 64px; }
 select { color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .check input { accent-color: var(--accent); width: 16px; height: 16px; }
@@ -296,15 +295,13 @@ main { flex: 1; min-width: 0; height: 100vh; display: flex; flex-direction: colu
 .answers { display: flex; flex-direction: column; gap: 8px; }
 .note-card { background: var(--green-soft); border-color: transparent; }
 .note-card .qlabel { color: var(--green); }
-.edit-area { width: 100%; min-height: 64px; resize: vertical; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 8px 10px; }
 
 .composer { background: var(--panel); border-top: 1px solid var(--line); padding: 14px 32px 18px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
 .reply-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--accent-soft); border-radius: 8px; padding: 6px 10px; font-size: 12px; }
 .reply-bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .reply-bar b { color: var(--accent); }
 .input-row { display: flex; gap: 10px; align-items: flex-end; }
-.input-row textarea { flex: 1; resize: none; min-height: 48px; max-height: 220px; line-height: 1.4; overflow-y: hidden; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); outline: none; }
-.input-row textarea:focus { border-color: var(--accent); }
+.input-row .md-editor { flex: 1; }
 .input-row .btn { padding: 12px 18px; border-radius: 10px; }
 
 /* ---------- markdown ---------- */
@@ -327,6 +324,17 @@ main { flex: 1; min-width: 0; height: 100vh; display: flex; flex-direction: colu
 .md img { max-width: 100%; border-radius: 6px; }
 mark { background: var(--highlight); color: inherit; border-radius: 3px; padding: 0 1px; }
 
+/* ---------- markdown editor ----------
+   The box around MarkdownEditor.svelte; inside it, CodeMirror is styled in lib/markdownEditor.ts, from these tokens. */
+.md-editor {
+	--md-pad-y: 8px; --md-pad-x: 10px; --md-max-height: 50vh;
+	width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+	color: var(--ink); font-size: 14px; font-weight: 400; cursor: text;
+}
+.md-editor:focus-within { border-color: var(--accent); }
+.md-editor.md-doc { --md-pad-y: 14px; --md-pad-x: 14px; --md-max-height: none; border-radius: 10px; }
+.md-editor.md-composer { --md-pad-y: 12px; --md-pad-x: 14px; --md-max-height: 220px; border-radius: 10px; }
+
 /* ---------- documents ---------- */
 .doc-list { display: flex; flex-direction: column; }
 .doc-row { display: grid; grid-template-columns: 1fr 150px 90px 120px; gap: 12px; align-items: center; padding: 12px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; color: inherit; text-decoration: none; }
@@ -340,17 +348,16 @@ mark { background: var(--highlight); color: inherit; border-radius: 3px; padding
 .title-input:hover { border-color: var(--line); }
 .title-input:focus { outline: none; border-color: var(--accent); background: var(--bg); }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg button { background: var(--card); border: 0; color: var(--muted); padding: 7px 12px; font-size: 12px; font-weight: 600; }
+.seg button {
+	background: var(--card); border: 0; color: var(--muted); padding: 7px 12px; font-size: 12px; font-weight: 600;
+	display: inline-flex; align-items: center; gap: 6px;
+}
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: var(--accent); color: var(--accent-ink); }
 .version-strip { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .vchip { border: 1px solid var(--line); background: var(--card-2); color: var(--muted); border-radius: 999px; padding: 3px 10px; font-size: 12px; text-decoration: none; }
 .vchip:hover { border-color: var(--accent); }
 .vchip.on { border-color: var(--accent); color: var(--ink); background: var(--accent-soft); }
-.editor-split { display: grid; gap: 16px; grid-template-columns: 1fr; }
-.editor-split.both { grid-template-columns: 1fr 1fr; }
-.doc-editor { width: 100%; min-height: 58vh; font: 13px/1.6 var(--font-mono); padding: 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); resize: vertical; }
-.doc-editor:focus { outline: none; border-color: var(--accent); }
 .doc-view { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 22px; min-height: 40vh; }
 .save-state { font-size: 12px; color: var(--faint); }
 
@@ -363,8 +370,7 @@ mark { background: var(--highlight); color: inherit; border-radius: 3px; padding
 .tpl-row .name span { color: var(--muted); font-size: 12.5px; }
 .q-list { display: flex; flex-direction: column; gap: 6px; }
 .q-row { display: flex; gap: 6px; align-items: flex-start; }
-.q-row textarea { flex: 1; min-height: 40px; resize: vertical; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }
-.q-row textarea:focus { outline: none; border-color: var(--accent); }
+.q-row .md-editor { flex: 1; }
 .q-row .btns { display: flex; flex-direction: column; }
 
 /* ---------- planboard ---------- */
@@ -496,10 +502,9 @@ mark { background: var(--highlight); color: inherit; border-radius: 3px; padding
 	.board { padding-left: 14px; padding-right: 14px; }
 	.header-top { flex-direction: column; gap: 8px; }
 	.header-actions { width: 100%; justify-content: flex-start; }
-	.input-row textarea, input, textarea, select { font-size: 16px; }
+	.md-editor, input, select { font-size: 16px; }
 	.doc-row, .doc-row.all { grid-template-columns: 1fr auto; row-gap: 4px; }
 	.doc-row .doc-date, .doc-row .doc-space, .doc-row .badge.type { display: none; }
-	.editor-split.both { grid-template-columns: 1fr; }
 	.col { flex-basis: 82vw; }
 	.story-row { grid-template-columns: 60px 1fr auto; }
 	.story-row .k-meta { display: none; }

@@ -6,6 +6,7 @@
 	import type { Upload } from '$lib/types';
 	import FileImage from './FileImage.svelte';
 	import Markdown from './Markdown.svelte';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 
 	let { project, thread, upload }: { project: string; thread: string; upload: Upload } = $props();
 
@@ -62,17 +63,14 @@
 	</div>
 
 	{#if editing}
-		<!-- svelte-ignore a11y_autofocus -->
-		<textarea
-			class="edit-area"
+		<MarkdownEditor
 			bind:value={draft}
-			autofocus
+			label="Description"
 			placeholder="What is this file?"
-			onkeydown={(e) => {
-				if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save();
-				if (e.key === 'Escape') editing = false;
-			}}
-		></textarea>
+			autofocus
+			onsubmit={save}
+			oncancel={() => (editing = false)}
+		/>
 		<div class="row-end">
 			<button class="btn small ghost" onclick={() => (editing = false)}>Cancel</button>
 			<button class="btn small primary" onclick={save} disabled={saving}>Save</button>

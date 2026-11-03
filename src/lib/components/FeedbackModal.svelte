@@ -6,6 +6,7 @@
 	import { listOrder } from '$lib/order.svelte';
 	import { attempt, refresh } from '$lib/ui.svelte';
 	import type { DeliverableSummary } from '$lib/types';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 	import Modal from './Modal.svelte';
 
 	/** Feedback lands on a deliverable — its current file, or any version that was published. */
@@ -59,10 +60,10 @@
 				{#each options as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
 			</select>
 		</label>
-		<label class="field">
+		<div class="field">
 			Your feedback
-			<textarea bind:value={body} rows="8" placeholder="What works, what doesn’t, what to change. Markdown works."></textarea>
-		</label>
+			<MarkdownEditor bind:value={body} rows={8} label="Your feedback" placeholder="What works, what doesn’t, what to change. Markdown works." />
+		</div>
 	{/if}
 
 	{#snippet footer()}

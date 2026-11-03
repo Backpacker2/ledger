@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { api } from '$lib/api';
 	import { attempt, refresh, toast } from '$lib/ui.svelte';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 	import Modal from './Modal.svelte';
 
 	/** Files picked in the file dialog, waiting for a description before they are copied into the project. */
@@ -32,10 +33,10 @@
 	<ul style="margin:0;padding-left:18px">
 		{#each paths as p (p)}<li class="mono" title={p}>{nameOf(p)}</li>{/each}
 	</ul>
-	<label class="field">
+	<div class="field">
 		Description (optional{paths.length > 1 ? ', shared by all of them' : ''})
-		<textarea bind:value={description} rows="4" placeholder="What is this? Markdown works."></textarea>
-	</label>
+		<MarkdownEditor bind:value={description} rows={4} label="Description" placeholder="What is this? Markdown works." autofocus />
+	</div>
 	<p class="hint" style="margin:0">Files are copied into the project’s attachments folder, and noted in this thread.</p>
 
 	{#snippet footer()}
