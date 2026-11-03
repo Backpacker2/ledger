@@ -164,7 +164,8 @@
 				ai: aiMade,
 				mmm: level || null,
 				prompt: aiMade ? promptId || null : null,
-				run: aiMade ? (stopped?.id ?? null) : null,
+				// The stopped run only goes on the record when the prompt is the one it ran.
+				run: aiMade && stopped && (!promptId || promptId === stopped.promptId) ? stopped.id : null,
 				note: changeNote.trim() || null
 			})
 		);
