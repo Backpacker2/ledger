@@ -204,6 +204,23 @@ HTTP, events, the file picker, opening files) is in `src/lib/platform.ts`; impor
   against the `Tailscale-User-Login` header that `tailscale serve` adds).
 - It has no login of its own: keep it on `127.0.0.1` behind `tailscale serve`, never on a public address.
 
+To put it on a Mac at home (an Intel Mac mini, say) and keep it running there, from this machine:
+
+```bash
+scripts/deploy-mini.sh <ssh-host>     # the Mac's Tailscale name, or a Host from ~/.ssh/config
+```
+
+It builds the screens and the server for that Mac (`LEDGER_ARCH=x86_64` by default, `aarch64` for Apple silicon),
+copies them to `~/ledger-server` there, writes `~/ledger-server/ledger-server.env` the first time (the vault
+`~/ledger-vault`, the port, `LEDGER_ALLOWED_LOGINS`; kept on later deploys), installs a LaunchAgent that starts it at
+login and restarts it if it stops, waits until it answers, and runs `tailscale serve --bg 8787`. Run it again to
+update. The other Mac only needs Tailscale and Remote Login (or Tailscale SSH); turn on automatic login there so it
+comes back after a power cut. `--package` only builds the bundle into `dist/`.
+
+Then, on the phone: open the `https://<machine>.<tailnet>.ts.net` address it prints, fill the empty vault with
+**Settings → Sync & external → Sync to GitHub** (the same repository the desktop app syncs to), and add Ledger to the
+home screen (Safari: Share → Add to Home Screen).
+
 ## Versions and releases
 
 Every push to `main` that brings [conventional commits](https://www.conventionalcommits.org) is released by CI
