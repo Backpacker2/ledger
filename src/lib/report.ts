@@ -3,7 +3,7 @@
 
 import type { AboutInfo, LogEntry } from './types';
 
-export const REPO_URL = 'https://github.com/openledger-nl/ledger';
+export const REPO_URL = 'https://github.com/Backpacker2/ledger';
 
 /**
  * The longest new-issue link that is sent. GitHub answers "Your request URL is too long" well before browsers give
