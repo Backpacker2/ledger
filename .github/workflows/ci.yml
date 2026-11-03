@@ -36,4 +36,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      # With the mobile server too, so its check that every command is served or desktop-only runs.
+      - run: cargo test --locked --features server --manifest-path src-tauri/Cargo.toml
