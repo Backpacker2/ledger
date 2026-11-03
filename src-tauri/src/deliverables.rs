@@ -166,6 +166,22 @@ pub fn list(conn: &Connection, project: &str) -> Result<Vec<DeliverableSummary>>
         *open_feedback.entry(split_version(&path).0).or_default() += 1;
     }
 
+    // The label of the newest version that has one.
+    let mut labels: HashMap<String, ((u32, u32), String)> = HashMap::new();
+    for (path, version, mmm) in query_all::<(String, String, String), _>(
+        conn,
+        "SELECT deliverable_path, version, mmm FROM version_records WHERE project_slug = ?1 AND mmm IS NOT NULL",
+        [project],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )? {
+        if let Some(number) = parse_version(&version)
+            && provenance::level(&mmm).is_some()
+            && labels.get(&path).is_none_or(|(known, _)| number > *known)
+        {
+            labels.insert(path, (number, mmm));
+        }
+    }
+
     let mut out: Vec<DeliverableSummary> = groups
         .into_iter()
         .map(|(base, mut group)| {
@@ -184,6 +200,7 @@ pub fn list(conn: &Connection, project: &str) -> Result<Vec<DeliverableSummary>>
                 versions: group.snapshots.iter().map(|s| s.2.clone()).collect(),
                 prompt_count: prompt_counts.get(&base).copied().unwrap_or(0),
                 open_feedback: open_feedback.get(&base).copied().unwrap_or(0),
+                mmm: labels.get(&base).map(|(_, level)| level.clone()),
                 path: base,
             }
         })

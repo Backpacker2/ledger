@@ -71,9 +71,10 @@ pub struct PostView {
     pub version_published: bool,
     pub deliverable_path: Option<String>,
     pub deliverable_version: Option<String>,
-    /// The prompt that caused the version, and its name while it still exists.
+    /// The prompt that caused the version, and its name and thread while it still exists.
     pub prompt_id: Option<String>,
     pub prompt_title: Option<String>,
+    pub prompt_thread: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub body: String,
@@ -171,6 +172,8 @@ pub struct DeliverableSummary {
     pub versions: Vec<String>,
     pub prompt_count: i64,
     pub open_feedback: i64,
+    /// The AI-use (MMM) label of the newest version that has one.
+    pub mmm: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

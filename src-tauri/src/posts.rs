@@ -30,6 +30,7 @@ fn from_row(r: &Row<'_>) -> rusqlite::Result<PostView> {
         deliverable_version: r.get(5)?,
         prompt_id: r.get(6)?,
         prompt_title: None,
+        prompt_thread: None,
         created_at: r.get(7)?,
         updated_at: r.get(8)?,
         html: markdown::render(&body),
@@ -40,7 +41,10 @@ fn from_row(r: &Row<'_>) -> rusqlite::Result<PostView> {
 /// Names the prompt a note points at, when it still exists.
 fn complete(conn: &Connection, project: &str, mut post: PostView) -> Result<PostView> {
     if let Some(id) = &post.prompt_id {
-        post.prompt_title = prompts::display_title_of(conn, project, id)?;
+        if let Some((thread, title)) = prompts::locate(conn, project, id)? {
+            post.prompt_thread = Some(thread);
+            post.prompt_title = Some(title);
+        }
     }
     Ok(post)
 }

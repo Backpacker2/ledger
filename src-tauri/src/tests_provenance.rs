@@ -129,6 +129,8 @@ fn ticking_that_ai_made_the_change_records_it_with_its_label_prompt_and_note() {
     assert!(prov.history_has_ai);
     assert_eq!(prov.summary.label.as_ref().map(|l| (l.level.as_str(), l.version.as_str())), Some(("cyborg", "0.1")));
     assert_eq!(prov.suggested_label.as_deref(), Some("cyborg"));
+    let listed = deliverables::list(&c, &p).unwrap();
+    assert_eq!(listed.iter().find(|d| d.path == "plan.md").unwrap().mmm.as_deref(), Some("cyborg"), "the list shows the label too");
 }
 
 #[test]

@@ -182,9 +182,14 @@ pub fn display_title(title: &str, body: &str) -> String {
 
 /// [`display_title`] of the prompt with this id, or `None` when it is gone.
 pub fn display_title_of(conn: &Connection, project: &str, id: &str) -> Result<Option<String>> {
-    Ok(query_opt(conn, "SELECT title, body FROM prompts WHERE project_slug = ?1 AND id = ?2", [project, id], |r| {
-        Ok(display_title(&r.get::<_, String>(0)?, &r.get::<_, String>(1)?))
-    })?)
+    Ok(locate(conn, project, id)?.map(|(_, title)| title))
+}
+
+/// The thread and the name of the prompt with this id, or `None` when it is gone.
+pub fn locate(conn: &Connection, project: &str, id: &str) -> Result<Option<(String, String)>> {
+    query_opt(conn, "SELECT thread_slug, title, body FROM prompts WHERE project_slug = ?1 AND id = ?2", [project, id], |r| {
+        Ok((r.get::<_, String>(0)?, display_title(&r.get::<_, String>(1)?, &r.get::<_, String>(2)?)))
+    })
 }
 
 /// The prompts that produced a deliverable (given by its live path), oldest first. A prompt counts when it is linked
