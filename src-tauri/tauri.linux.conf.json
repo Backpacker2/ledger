@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "linux": {
+      "deb": { "desktopTemplate": "linux/ledger.desktop" },
+      "rpm": { "desktopTemplate": "linux/ledger.desktop" }
+    }
+  }
+}

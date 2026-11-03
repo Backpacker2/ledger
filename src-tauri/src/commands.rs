@@ -654,6 +654,20 @@ pub fn save_screenshot_hotkey(app: AppHandle, hotkey: String) -> Result<Settings
     Ok(view(&state))
 }
 
+/// Chooses between the built-in capture and the user's own tool (and saves the tool's command either way).
+#[tauri::command]
+pub fn save_screenshot_tool(app: State<App>, use_command: bool, command: String) -> Result<SettingsView> {
+    let root = app.lock().vault.root().to_path_buf();
+    screenshot::save_tool(&root, use_command, &command)?;
+    Ok(view(&app))
+}
+
+/// The screenshot waiting to be attached, if there is one (Ledger may have been launched with a picture).
+#[tauri::command]
+pub fn pending_screenshot(app: AppHandle) -> Option<screenshot::Taken> {
+    screenshot::pending(&app)
+}
+
 /// Takes a screenshot as if the hotkey had been pressed.
 #[tauri::command]
 pub fn take_screenshot(app: AppHandle) {

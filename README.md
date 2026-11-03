@@ -67,22 +67,50 @@ Use a [fine-grained token](https://github.com/settings/personal-access-tokens/ne
 - **Templates** — a name, a "use when…" hint, guiding questions and the skeleton of the deliverable. Global ones (sidebar → Templates) serve every project; a project can *customise* one, which copies it into the project, where it replaces the shared one.
 - **User stories** — an id you choose (`MM01`), a summary, "As a / I want to / Such that", notes and acceptance criteria you tick off. A story links to any number of threads.
 - **Board** — per project, with customisable columns (Backlog → Doing → Done by default). Tasks can point at a story and a thread. Drag a card, or use its arrows, to change column; a column that still holds tasks can't be deleted.
-- **Screenshots** — press a global hotkey (default Ctrl/⌘+Shift+S) anywhere: the screen under the cursor is captured, a full-screen overlay lets you drag out a region, and Ledger asks which project and thread the picture belongs to. See below.
+- **Screenshots** — press a global hotkey (default Ctrl/⌘+Shift+S) anywhere: your own screenshot tool (Flameshot, say) or the built-in capture takes the picture, and Ledger offers to attach it to the thread you have open. Pictures sent to Ledger with "Open with" land the same way. See below.
 - **Search** across every post, prompt, feedback and deliverable, with highlighted snippets. **Themes**: Dark, Night, Forest, Ocean, Sepia, Light.
 
 ## Screenshots
 
-**Settings → Screenshots** holds the hotkey. It is stored per vault in `.ledger/settings.json`, so it is never synced. The hotkey is set with a key recorder, checked (it needs a modifier, and the system's own shortcuts are refused) and registered immediately, replacing the old one without a restart; if the system won't register it (usually because another program owns it) you get a warning and the old shortcut keeps working.
+**Settings → Screenshots** holds the hotkey and the tool. Both are stored per vault in `.ledger/settings.json`, so they are never synced, and each machine can use its own tool. The hotkey is set with a key recorder, checked (it needs a modifier, and the system's own shortcuts are refused) and registered immediately, replacing the old one without a restart; if the system won't register it (usually because another program owns it) you get a warning and the old shortcut keeps working.
 
-The flow: the hotkey captures the monitor under the cursor ([xcap](https://crates.io/crates/xcap)); a frameless, always-on-top window shows the capture so you can drag out a region (Esc or a right-click cancels); the backend crops it — scaling the drag from window units to capture pixels, so HiDPI screens come out exact — and encodes a PNG, which it holds in memory. Ledger then emits `screenshot-ready`, brings its main window forward and asks for a project, a thread (or a new one) and an optional description. *Attach* saves the PNG in the project's `attachments/`, writes the upload manifest and opens the thread at it; *Discard* drops it. Failures (a missing permission, no screen) are shown the same way.
+When a picture arrives, Ledger holds the PNG in memory, emits `screenshot-ready`, brings its main window forward and asks where it goes. With a thread open that is a short confirmation (that thread, an optional description, Enter); *Change…* or no open thread gives the full choice of project and thread (or a new one). *Attach* saves the PNG in the project's `attachments/`, writes the upload manifest and opens the thread at it; *Discard* drops it. Failures are shown the same way.
 
-Platforms:
+### Your own tool (bring your own)
 
-- **Windows, Linux (X11)** — as above.
-- **macOS** needs the Screen Recording permission. Ledger checks it before capturing, triggers the system prompt the first time, and otherwise says where to switch it on (System Settings → Privacy & Security → Screen & System Audio Recording; Ledger must be restarted afterwards). A transparent overlay window needs Tauri's `macos-private-api`, which isn't enabled; the overlay is opaque (it shows the capture anyway).
-- **Linux under Wayland** can't capture the screen or grab a key directly, so Ledger asks the XDG desktop portals ([ashpd](https://crates.io/crates/ashpd)): the compositor's own area picker replaces the overlay, and the hotkey is bound through the global-shortcuts portal. If the desktop doesn't offer that portal, Settings says so and the *Take a screenshot now* button still works.
+Choose **My own tool** and give a command. Ledger runs it when the hotkey is pressed; it is split into a program and its arguments by Ledger itself (spaces separate, quotes group, backslashes are kept), so it means the same everywhere and needs no shell.
 
-The macOS and Linux code has been type-checked but not run; the Windows flow is exercised end to end.
+- With `{file}` in it, Ledger fills in a fresh temporary `.png` path, waits for the tool to exit and reads the file.
+- Without `{file}`, Ledger reads the PNG the tool prints.
+- No picture means cancelled, unless the tool printed an error (anything but an "aborted"/"cancelled" message), which is shown.
+
+Presets, offered in Settings with whether the program was found:
+
+| | Command |
+|---|---|
+| Linux, Flameshot | `flameshot gui --raw` |
+| macOS, built-in picker | `screencapture -i {file}` |
+| macOS, Flameshot | `/Applications/flameshot.app/Contents/MacOS/flameshot gui -p {file}` |
+| Windows, Flameshot | `"C:\Program Files\Flameshot\bin\flameshot.exe" gui -p {file}` |
+
+### Opened with Ledger
+
+A PNG passed to Ledger on the command line becomes the screenshot waiting to be attached; a second launch is handed to the running app by [tauri-plugin-single-instance](https://crates.io/crates/tauri-plugin-single-instance), and on macOS opened files arrive as `RunEvent::Opened`. That is what Flameshot's *Open with* (Ctrl+O in its editor) uses.
+
+- **Linux**: the .deb and .rpm install a desktop entry with `Exec=ledger %F` and `MimeType=image/png` (`src-tauri/linux/ledger.desktop`, set in `tauri.linux.conf.json`), so Ledger is listed. With `tauri dev` there is no desktop entry; to try it, put one in `~/.local/share/applications` whose `Exec` is `src-tauri/target/debug/ledger %F`.
+- **macOS**: `tauri.macos.conf.json` declares PNG with rank *Alternate*: Ledger appears under Finder's *Open With* but never becomes the default viewer.
+- **Windows**: no file association, because Tauri's installer would make Ledger the default PNG program. Pick `Ledger.exe` through *Open with → Look for another app on this PC*.
+
+### The built-in capture
+
+Used when no tool is chosen. It is meant to be removable (the list of what to delete is at `builtin` in `src-tauri/src/screenshot.rs`).
+
+- **Windows, macOS**: the monitor under the cursor is captured ([xcap](https://crates.io/crates/xcap)); a frameless, always-on-top window shows it so you can drag out a region (Esc or a right-click cancels); the backend crops it, scaling the drag from window units to capture pixels so HiDPI screens come out exact. macOS needs the Screen Recording permission: Ledger checks it before capturing, triggers the system prompt the first time, and otherwise says where to switch it on (Ledger must be restarted afterwards). The overlay is opaque on macOS (a transparent window needs Tauri's `macos-private-api`).
+- **Linux**: the desktop's screenshot portal ([ashpd](https://crates.io/crates/ashpd)), with the compositor's own area picker. xcap isn't built on Linux: it pulls in PipeWire, which needs `libpipewire-0.3-dev` and libclang just to compile.
+
+Under Wayland the hotkey is bound through the global-shortcuts portal; if the desktop doesn't offer it, Settings says so and the *Take a screenshot now* button still works.
+
+The built-in capture on Windows is exercised end to end. The macOS paths, and the Flameshot presets on Windows and macOS, have been type-checked but not run.
 
 ## Running it
 
@@ -112,7 +140,7 @@ src/                     SvelteKit frontend (static SPA)
   lib/api.ts             typed wrappers over the Tauri commands
   lib/ui.svelte.ts       toasts, dialogs, theme, and the backend's sync/vault/screenshot events
   lib/components/        sidebar tree, post/prompt/feedback/upload cards, composer, modals, hotkey recorder …
-  routes/screenshot-overlay  the full-screen region picker (its own window)
+  routes/screenshot-overlay  the built-in capture's region picker (its own window; not used on Linux)
 src-tauri/src/
   schema.sql             the in-memory database's shape and rules
   projects.rs threads.rs posts.rs prompts.rs feedback.rs uploads.rs deliverables.rs templates.rs
@@ -123,7 +151,7 @@ src-tauri/src/
   sync.rs                the three-way reconcile, behind a `Remote` trait
   github.rs              the GitHub REST implementation of `Remote`
   syncer.rs              the background worker: debounce, poll, retry, status events
-  screenshot.rs          hotkey registration, capture, the overlay window, crop; Wayland portals
+  screenshot.rs          hotkey, your own tool, pictures opened with Ledger, the built-in capture; Linux portals
   state.rs commands.rs   the running app and the thin Tauri command layer
   markdown.rs            markdown → HTML; raw HTML is escaped and unsafe link targets dropped
   tests*.rs              behaviour tests

@@ -298,6 +298,21 @@ export interface ScreenshotSettings {
 	problem: string | null;
 	/** Something about this platform worth knowing (a missing permission, Wayland). */
 	note: string | null;
+	/** Whether the user's own tool takes the screenshots, and its command (kept while the built-in one is used). */
+	useCommand: boolean;
+	command: string;
+	/** Ready-made commands for this platform. */
+	presets: ScreenshotPreset[];
+	/** What the built-in capture does on this platform. */
+	builtin: string;
+	platform: 'linux' | 'macos' | 'windows';
+}
+
+export interface ScreenshotPreset {
+	name: string;
+	command: string;
+	/** The program is installed where the command expects it. */
+	found: boolean;
 }
 
 export interface Settings {

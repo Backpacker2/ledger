@@ -12,6 +12,7 @@ import type {
 	ProjectView,
 	Prompt,
 	Region,
+	ScreenshotTaken,
 	SearchHit,
 	Settings,
 	Story,
@@ -162,6 +163,8 @@ export const api = {
 
 	// screenshots
 	saveScreenshotHotkey: (hotkey: string) => call<Settings>('save_screenshot_hotkey', { hotkey }),
+	saveScreenshotTool: (useCommand: boolean, command: string) => call<Settings>('save_screenshot_tool', { useCommand, command }),
+	pendingScreenshot: () => call<ScreenshotTaken | null>('pending_screenshot'),
 	takeScreenshot: () => call<void>('take_screenshot'),
 	/** Lets go of the hotkey while it is being re-recorded, and takes it back afterwards. */
 	pauseScreenshotHotkey: (paused: boolean) => call<void>('pause_screenshot_hotkey', { paused }),

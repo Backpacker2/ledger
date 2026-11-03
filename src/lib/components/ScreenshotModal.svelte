@@ -8,7 +8,10 @@
 	import type { ProjectSummary } from '$lib/types';
 	import Modal from './Modal.svelte';
 
-	/** Asks where a freshly taken screenshot belongs: a project and a thread, plus a note about it. */
+	/**
+	 * Asks where a freshly taken screenshot belongs: a project and a thread, plus a note about it. With a thread
+	 * open it is a short confirmation (that thread, an optional note, Enter); "Change" shows the full choice.
+	 */
 	let { projects }: { projects: ProjectSummary[] } = $props();
 
 	const NEW = '__new__';
@@ -19,6 +22,8 @@
 	let title = $state('');
 	let description = $state('');
 	let busy = $state(false);
+	/** Straight to the open thread: only the preview, where it goes and the description. */
+	let compact = $state(false);
 
 	const chosen = $derived(projects.find((p) => p.slug === project));
 	const creating = $derived(thread === NEW);
@@ -37,6 +42,7 @@
 			const here = page.params.project;
 			project = projects.find((p) => p.slug === here)?.slug ?? projects[0]?.slug ?? '';
 			thread = defaultThread(project);
+			compact = !!page.params.thread && thread === page.params.thread;
 		});
 		api.pendingScreenshotImage()
 			.then((bytes) => {
@@ -64,6 +70,16 @@
 	function pickProject(slug: string) {
 		project = slug;
 		thread = defaultThread(slug);
+	}
+
+	const threadTitle = $derived(chosen?.threads.find((t) => t.slug === thread)?.title ?? thread);
+
+	// Enter attaches; Shift+Enter is a new line in the description.
+	function onDescriptionKey(e: KeyboardEvent) {
+		if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+			e.preventDefault();
+			void attach();
+		}
 	}
 
 	async function discard() {
@@ -110,6 +126,15 @@
 					}}>New project</button
 				>
 			</div>
+		{:else if compact}
+			<div class="shot-target">
+				<span>Attach to <strong>{chosen?.name}</strong> › <strong>{threadTitle}</strong></span>
+				<button class="btn ghost" onclick={() => (compact = false)}>Change…</button>
+			</div>
+			<label class="field">
+				Description (optional)
+				<textarea bind:value={description} rows="2" placeholder="What does this show? Markdown works." onkeydown={onDescriptionKey}></textarea>
+			</label>
 		{:else}
 			<div class="form-row">
 				<label class="field grow">
@@ -134,12 +159,12 @@
 			{/if}
 			<label class="field">
 				Description (optional)
-				<textarea bind:value={description} rows="3" placeholder="What does this show? Markdown works."></textarea>
+				<textarea bind:value={description} rows="3" placeholder="What does this show? Markdown works." onkeydown={onDescriptionKey}></textarea>
 			</label>
 		{/if}
 
 		{#snippet footer()}
-			<span class="hint">Saved to the project’s attachments folder.</span>
+			<span class="hint">Enter attaches · Shift+Enter new line · Esc discards</span>
 			<span class="spacer-h"></span>
 			<button class="btn ghost" onclick={discard}>Discard</button>
 			<button class="btn primary" onclick={attach} disabled={busy || !project || (creating && !title.trim())}>Attach</button>

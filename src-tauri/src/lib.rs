@@ -61,7 +61,15 @@ use crate::syncer::Event;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // First, so a second launch hands its arguments over before anything else starts. That is how a picture
+    // opened with Ledger (Flameshot's "Open with", a file manager) reaches the window that is already open.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+        screenshot::reveal_main(app);
+        screenshot::open_files(app, args.get(1..).unwrap_or_default(), std::path::Path::new(&cwd));
+    }));
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -93,6 +101,9 @@ pub fn run() {
             app.manage(state::App::new(core, syncer, screenshot::Screenshots::new()));
             trello::start_app(app.handle(), trello_core); // feat/trello-sync: its own worker, needs the App state above
             screenshot::register_saved(app.handle());
+            // Launched with a picture to attach: it waits until the window asks for it.
+            let args: Vec<String> = std::env::args().skip(1).collect();
+            screenshot::open_files(app.handle(), &args, &std::env::current_dir().unwrap_or_default());
             Ok(())
         })
         .on_window_event(claude_code::on_window_event)
@@ -185,6 +196,8 @@ pub fn run() {
             commands::reload_vault,
             commands::check_vault_changes,
             commands::save_screenshot_hotkey,
+            commands::save_screenshot_tool,
+            commands::pending_screenshot,
             commands::take_screenshot,
             commands::pause_screenshot_hotkey,
             commands::screenshot_image,
@@ -203,6 +216,14 @@ pub fn run() {
             claude_code::claude_code_runs,
             claude_code::claude_code_run,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // macOS doesn't pass opened files as arguments: they arrive here, at launch and while running.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = &_event {
+                let paths: Vec<String> = urls.iter().filter_map(|u| u.to_file_path().ok()).map(|p| p.display().to_string()).collect();
+                screenshot::open_files(_app, &paths, std::path::Path::new("/"));
+            }
+        });
 }

@@ -5,7 +5,7 @@
 //! `.gitignore` lists, so none of it is ever pushed to GitHub:
 //!
 //! ```text
-//! .ledger/settings.json     the repository, the branch, the screenshot hotkey, whether sync encrypts
+//! .ledger/settings.json     the repository, the branch, the screenshot hotkey and tool, whether sync encrypts
 //! .ledger/.env              the GitHub access token and the vault's encryption key (the secrets, kept in a file)
 //! .ledger/sync-state.json   the sync's own bookkeeping
 //! .ledger/conflicts/        versions set aside when a sync resolved a conflict
@@ -92,7 +92,17 @@ pub struct EncryptionSettings {
 pub struct VaultSettings {
     pub github: GithubSettings,
     pub screenshot_hotkey: Option<String>,
+    pub screenshot_tool: ScreenshotTool,
     pub encryption: EncryptionSettings,
+}
+
+/// How a screenshot is taken: Ledger's built-in capture, or a program of the user's own (Flameshot, say). The
+/// command is remembered while the built-in one is in use, so switching back and forth loses nothing.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ScreenshotTool {
+    pub use_command: bool,
+    pub command: String,
 }
 
 pub fn settings_path(root: &Path) -> PathBuf {

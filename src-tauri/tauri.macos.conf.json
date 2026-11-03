@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "fileAssociations": [
+      {
+        "ext": ["png"],
+        "name": "PNG image",
+        "mimeType": "image/png",
+        "role": "Viewer",
+        "rank": "Alternate"
+      }
+    ]
+  }
+}

@@ -151,6 +151,12 @@ export function startBackendEvents(): () => void {
 	listen<string>('screenshot-error', (event) => toast(event.payload, true))
 		.then(keep)
 		.catch(() => {});
+	// Ledger may have been launched with a picture (Flameshot's "Open with") before anything was listening.
+	api.pendingScreenshot()
+		.then((taken) => {
+			if (taken && !screenshot.pending) screenshot.pending = taken;
+		})
+		.catch(() => {});
 
 	let lastCheck = 0;
 	const onFocus = async () => {
