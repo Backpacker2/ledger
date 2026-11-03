@@ -470,6 +470,19 @@ mark { background: var(--highlight); color: inherit; border-radius: 3px; padding
 .theme-swatch .bg { background: var(--bg); }
 .theme-swatch .accent { background: var(--accent); }
 .theme-card .theme-name { display: block; padding: 8px 10px; font-size: 13px; font-weight: 600; }
+/* A panel's title, led by the switch that turns its feature on or off. */
+.panel-head { display: flex; align-items: center; gap: 10px; }
+/* The longer explanations fold away, so each panel shows its settings first. */
+details.more { border-top: 1px solid var(--line); padding-top: 10px; }
+details.more > summary { cursor: pointer; font-size: 12.5px; font-weight: 500; color: var(--muted); width: fit-content; }
+details.more > summary:hover { color: var(--ink); }
+details.more[open] > summary { margin-bottom: 8px; }
+details.more > :not(summary) + :not(summary) { margin-top: 8px; }
+details.more p { margin: 0; }
+.settings-search { position: relative; width: 260px; max-width: 100%; }
+.settings-search input { width: 100%; padding-left: 30px; }
+.settings-search .lucide-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+.settings-group-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 4px 4px -8px; }
 .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; font-size: 13px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; word-break: break-all; }

@@ -171,7 +171,7 @@
 			so nothing of yours is lost under the run’s changes; that one is not linked.
 		</div>
 		{#if shown.problem}
-			<div class="notice bad">{shown.problem} <a href="/settings" onclick={() => (preview = null)}>Open Settings</a></div>
+			<div class="notice bad">{shown.problem} <a href="/settings/tools" onclick={() => (preview = null)}>Open Settings</a></div>
 		{/if}
 
 		<details open>

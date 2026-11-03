@@ -1,5 +1,7 @@
 <script lang="ts">
+	// Updating Ledger from inside the app: whether it looks by itself, and looking now.
 	import { onMount } from 'svelte';
+	import Switch from '$lib/components/Switch.svelte';
 	import { updatesApi } from '$lib/api';
 	import { ago, dateTime } from '$lib/format';
 	import { attempt } from '$lib/ui.svelte';
@@ -23,11 +25,9 @@
 		return view.automatic ? 'Looks shortly after starting, then every few hours' : 'Automatic checks are off';
 	});
 
-	async function toggle(e: Event) {
-		const box = e.currentTarget as HTMLInputElement;
-		const saved = await attempt(() => updatesApi.saveSettings(box.checked));
+	async function toggle(automatic: boolean) {
+		const saved = await attempt(() => updatesApi.saveSettings(automatic));
 		if (saved) view = saved;
-		else box.checked = !box.checked;
 	}
 
 	async function check() {
@@ -53,7 +53,10 @@
 </script>
 
 <div class="panel">
-	<h2>About</h2>
+	<div class="panel-head">
+		{#if view}<Switch checked={view.automatic} label="Check for updates automatically" onchange={toggle} />{/if}
+		<h2>Updates</h2>
+	</div>
 	{#if view}
 		<div class="kv">
 			<dt>Version</dt>
@@ -68,12 +71,8 @@
 			<div class="notice info">{view.unavailable}</div>
 		{/if}
 
-		<label class="check">
-			<input type="checkbox" checked={view.automatic} onchange={toggle} />
-			Check for updates automatically
-		</label>
 		<div class="hint">
-			Ledger looks shortly after it starts and every few hours, and tells you when a new version is out. It never installs one until you click
+			With the switch on, Ledger looks shortly after it starts and every few hours, and tells you when a new version is out. It never installs one until you click
 			<b>Install and restart</b>, and then waits for a sync or a Claude Code run to finish first. With this off, Ledger only looks when you click
 			<b>Check for updates</b>. The choice is kept for this computer, in <code>{view.configFile}</code>, not in the vault.
 		</div>

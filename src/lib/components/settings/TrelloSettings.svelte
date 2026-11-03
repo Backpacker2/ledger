@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { listen } from '@tauri-apps/api/event';
 	import { openUrl } from '@tauri-apps/plugin-opener';
+	import Switch from '$lib/components/Switch.svelte';
 	import { trelloApi as api } from '$lib/api';
 	import { ago, dateTime } from '$lib/format';
 	import { attempt, confirmDialog, toast } from '$lib/ui.svelte';
@@ -16,6 +17,7 @@
 	const status = $derived(live ?? view?.status ?? null);
 
 	let apiKey = $state('');
+	let keyInput = $state<HTMLInputElement>();
 	let token = $state('');
 	let busy = $state<string | null>(null);
 	let result = $state<{ ok: boolean; message: string } | null>(null);
@@ -136,6 +138,13 @@
 		result = null;
 	}
 
+	/** Off removes the key and token (after asking); on points at the fields to fill in. */
+	function toggleTrello(on: boolean) {
+		if (!on) return void disconnect();
+		toast('Fill in the API key and token below, then save.');
+		keyInput?.focus();
+	}
+
 	// ---- the person ----------------------------------------------------------------------------
 
 	async function chooseBoard(id: string) {
@@ -236,7 +245,10 @@
 </script>
 
 <div class="panel">
-	<h2>Sync with Trello</h2>
+	<div class="panel-head">
+		<Switch checked={ready} label="Sync with Trello" disabled={!view || busy !== null} onchange={toggleTrello} />
+		<h2>Sync with Trello</h2>
+	</div>
 	<p class="sub" style="margin:0">
 		Keep tasks and user stories in step with the Trello cards of <strong>one person</strong>. Cards that person is a member of come in as tasks (or as
 		user stories, when they carry the “User story” label), and a task or story made here becomes a card on Trello with that person assigned. Cards of
@@ -253,6 +265,7 @@
 			<label class="field grow">
 				API key
 				<input
+					bind:this={keyInput}
 					type="password"
 					bind:value={apiKey}
 					placeholder={view.hasKey ? `Saved ${view.keyHint} — leave blank to keep it` : 'Your Trello API key'}
