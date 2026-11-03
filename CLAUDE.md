@@ -59,5 +59,6 @@ pnpm test        # Rust tests
 - Colours and fonts come from the tokens at the top of `src/app.css` (`--brand-*`, the theme tokens, `--font-sans`,
   `--font-mono`). Use a token, never a literal colour, in components and CSS.
 - Icons are Lucide: `import X from '@lucide/svelte/icons/x'` (one file per icon, not the package root).
-- The logo and wordmark files are in `src/lib/assets/brand/`; the app icons in `src-tauri/icons/` are generated from
-  the mark. Don't redraw them in code.
+- In the UI the wordmark is `<Wordmark />` (`src/lib/components/Wordmark.svelte`): drawn inline so its L and cursor
+  take the theme's `--accent`. The files in `src/lib/assets/brand/` are the fixed-colour (indigo) logo for everything
+  outside the app; the app icons in `src-tauri/icons/` are generated from the mark. Don't draw new versions in code.
