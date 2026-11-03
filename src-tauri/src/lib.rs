@@ -27,6 +27,7 @@ mod sync;
 mod syncer;
 mod templates;
 mod threads;
+mod updates;
 mod uploads;
 mod vault;
 
@@ -54,6 +55,8 @@ mod tests_screenshot;
 #[cfg(test)]
 mod tests_sync;
 #[cfg(test)]
+mod tests_updates;
+#[cfg(test)]
 mod tests_vault;
 
 
@@ -73,13 +76,17 @@ pub fn run() {
         screenshot::reveal_main(app);
         screenshot::open_files(app, args.get(1..).unwrap_or_default(), std::path::Path::new(&cwd));
     }));
+    // Looking for and installing new releases (`updates.rs`): in release builds only, so `tauri dev`, debug builds
+    // and sandboxes never look. `updates::BUILT_IN` says the same to the rest of the app.
+    #[cfg(not(debug_assertions))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             // The vault is loaded into memory before the window shows anything.
-            // LEDGER_CONFIG_DIR moves the per-machine settings (vault location, screenshot hotkey) for testing.
+            // LEDGER_CONFIG_DIR moves the per-machine settings (vault location, screenshot hotkey, update checks) for testing.
             let config_dir = match std::env::var_os("LEDGER_CONFIG_DIR") {
                 Some(dir) => dir.into(),
                 None => app.path().app_config_dir()?,
@@ -104,6 +111,8 @@ pub fn run() {
 
             app.manage(state::App::new(core, syncer, screenshot::Screenshots::new()));
             trello::start_app(app.handle(), trello_core); // feat/trello-sync: its own worker, needs the App state above
+            // Looks for new releases now and then (release builds only); it asks the syncs above whether they are busy.
+            updates::start(app.handle(), config_dir);
             screenshot::register_saved(app.handle());
             // Launched with a picture to attach: it waits until the window asks for it.
             let args: Vec<String> = std::env::args().skip(1).collect();
@@ -222,6 +231,11 @@ pub fn run() {
             claude_code::claude_code_cancel,
             claude_code::claude_code_runs,
             claude_code::claude_code_run,
+            updates::update_status,
+            updates::save_update_settings,
+            updates::check_for_updates,
+            updates::install_update,
+            updates::simulate_update,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

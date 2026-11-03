@@ -1,7 +1,19 @@
 # Every push to main is a release when it brings conventional commits: scripts/release.mjs works out the version
 # (breaking → major, feat → minor, any other type → patch), writes it into package.json, tauri.conf.json,
-# Cargo.toml, Cargo.lock and CHANGELOG.md, and this commits that as `chore(release): vX.Y.Z`, tags it and
-# publishes a GitHub release with the notes.
+# Cargo.toml, Cargo.lock and CHANGELOG.md, and the `release` job commits that as `chore(release): vX.Y.Z`, tags it
+# and creates the GitHub release as a draft with the notes. The `build` jobs then build the installers from that tag
+# on Windows, macOS and Linux, sign them for the in-app updater and upload them, their .sig files and latest.json to
+# the draft. The `publish` job publishes the release only when every build has passed.
+#
+# Installed copies of Ledger ask for releases/latest/download/latest.json, and "latest" never means a draft: until
+# every platform's installer and signature is on the release, nobody is offered it. A release whose build failed
+# stays a draft: re-run the failed jobs (the run's page → Re-run failed jobs) to finish it, or delete the draft. Don't
+# publish a draft by hand; the publish job checks that latest.json is complete first.
+#
+# Signing the updater files takes the repository secrets TAURI_SIGNING_PRIVATE_KEY and
+# TAURI_SIGNING_PRIVATE_KEY_PASSWORD (from `pnpm tauri signer generate`); the matching public key is in
+# src-tauri/tauri.conf.json. Without them the builds fail and nothing is published. The installers themselves are not
+# signed for Windows or macOS (no certificates yet): the README says what people see the first time.
 name: Release
 
 on:
@@ -22,6 +34,12 @@ jobs:
     # unlike one with GITHUB_TOKEN.
     if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
     runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.version.outputs.released }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      release_id: ${{ steps.draft.outputs.id }}
+      notes: ${{ steps.draft.outputs.notes }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,9 +69,129 @@ jobs:
           git tag -a "$TAG" -m "$TAG"
           git push --atomic origin HEAD:main "$TAG"
 
-      - name: Publish the GitHub release
+      # A draft: /releases/latest ignores it, so the updater doesn't see the release before its files are there.
+      - name: Create the GitHub release as a draft
+        id: draft
         if: steps.version.outputs.released == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
-        run: gh release create "$TAG" --title "Ledger $TAG" --notes-file .release-notes.md --verify-tag
+        run: |
+          id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
+            -f tag_name="$TAG" -f name="Ledger $TAG" -F body=@.release-notes.md -F draft=true --jq .id)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          # The notes also go into latest.json, which the app shows in its update notice.
+          {
+            echo 'notes<<LEDGER_RELEASE_NOTES_END'
+            cat .release-notes.md
+            echo 'LEDGER_RELEASE_NOTES_END'
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    strategy:
+      # One platform failing doesn't stop the others, so only the failed one needs re-running.
+      fail-fast: false
+      matrix:
+        include:
+          # NSIS only: it installs per user, without an administrator, so updates install without a UAC prompt.
+          - name: Windows
+            runner: windows-latest
+            args: --bundles nsis
+          # One universal app for Apple silicon and Intel; latest.json lists it for both.
+          - name: macOS
+            runner: macos-latest
+            args: --target universal-apple-darwin
+          # The oldest Ubuntu GitHub still offers, so the AppImage and .deb run on older distributions too.
+          - name: Linux
+            runner: ubuntu-22.04
+            args: ''
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Libraries Tauri needs on Linux
+        if: runner.os == 'Linux'
+        # libxdo for the global screenshot shortcut; patchelf and xdg-utils for the AppImage.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev xdg-utils
+
+      - uses: pnpm/action-setup@v4 # the version pinned in package.json's packageManager
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # Both architectures for the universal macOS app.
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: pnpm install --frozen-lockfile
+
+      # tauri.release.conf.json turns on createUpdaterArtifacts: the .sig files (signed with the secret key) that the
+      # updater checks. It is only used here, so a local `pnpm tauri build` doesn't need the key. It also gives the
+      # macOS app an ad-hoc signature (free, no certificate): Apple silicon reports an app without any as damaged.
+      - name: Build, sign and upload to the draft release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.release.outputs.release_id }}
+          tagName: ${{ needs.release.outputs.tag }}
+          releaseDraft: true
+          # Only used for latest.json here (the draft already has its notes): the updater shows them.
+          releaseBody: ${{ needs.release.outputs.notes }}
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          retryAttempts: 1
+          args: --config src-tauri/tauri.release.conf.json ${{ matrix.args }}
+
+  publish:
+    name: Publish the release
+    needs: [release, build]
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      # Each build job adds its platforms to latest.json. Two finishing at the same moment could overwrite each other's
+      # entry, so check that every platform made it before anyone is offered the release. If one is missing, re-run
+      # that platform's build job: it adds its entry again, and this job runs again after it.
+      - name: Check that latest.json offers every platform
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.release.outputs.release_id }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          asset=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[] | select(.name == "latest.json") | .id')
+          if [ -z "$asset" ]; then
+            echo "::error::The release has no latest.json"
+            exit 1
+          fi
+          gh api -H 'Accept: application/octet-stream' "repos/$GITHUB_REPOSITORY/releases/assets/$asset" > latest.json
+          jq . latest.json
+          if [ "$(jq -r .version latest.json)" != "$VERSION" ]; then
+            echo "::error::latest.json is for version $(jq -r .version latest.json), not $VERSION"
+            exit 1
+          fi
+          missing=$(jq -r '. as $m | ["windows-x86_64", "darwin-aarch64", "darwin-x86_64", "linux-x86_64"][]
+            | select(($m.platforms[.].url // "") == "" or ($m.platforms[.].signature // "") == "")' latest.json)
+          if [ -n "$missing" ]; then
+            echo "::error::latest.json has no installer or signature for: $(echo $missing)"
+            exit 1
+          fi
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.release.outputs.release_id }}
+        run: gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -f make_latest=true --silent

@@ -692,3 +692,57 @@ export interface TrelloMapping {
 	/** Lists no column uses: their cards aren't added. */
 	unusedLists: string[];
 }
+
+// ---- Updating Ledger from inside the app (see src-tauri/src/updates.rs) -----------------------------
+
+/** A release newer than this one, as the notice shows it. */
+export interface UpdateInfo {
+	version: string;
+	currentVersion: string;
+	/** When it was published (ISO), if the release says. */
+	date: string | null;
+	/** The first number goes up: something may work differently afterwards. */
+	major: boolean;
+	/** The release notes, rendered, without the breaking changes. */
+	notesHtml: string;
+	/** The "Breaking changes" section, rendered, shown apart. */
+	breakingHtml: string | null;
+	/** A development build's pretend update: installing it installs nothing. */
+	simulated: boolean;
+}
+
+/** Settings → About. */
+export interface UpdateView {
+	currentVersion: string;
+	/** Look by itself shortly after starting and every few hours. */
+	automatic: boolean;
+	/** Why this build doesn't look for updates (a development build, or no updater key yet). */
+	unavailable: string | null;
+	/** A development build, which can simulate an update. */
+	devBuild: boolean;
+	available: UpdateInfo | null;
+	/** When a check last worked (ISO). */
+	checkedAt: string | null;
+	/** Where the choice is kept: the app's config, on this machine only. */
+	configFile: string;
+}
+
+export interface UpdateCheck {
+	available: UpdateInfo | null;
+	message: string;
+}
+
+/** What to do about Claude Code runs that a restart would stop: ask, wait for them, or stop them. */
+export type RunsChoice = 'ask' | 'wait' | 'stop';
+
+/** Where installing got to when it couldn't restart (yet). A real install that goes through ends in a restart. */
+export type InstallStep =
+	| { state: 'wait'; waitingFor: string[] }
+	| { state: 'ask'; runs: string[] }
+	| { state: 'simulated'; version: string };
+
+/** The `update-progress` event. */
+export interface UpdateProgress {
+	downloaded: number;
+	total: number | null;
+}

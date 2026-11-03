@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { openUrl } from '@tauri-apps/plugin-opener';
+	import AboutSettings from '$lib/components/AboutSettings.svelte';
 	import ClaudeCodeSettings from '$lib/components/ClaudeCodeSettings.svelte';
 	import HotkeyInput from '$lib/components/HotkeyInput.svelte';
 	import DashboardSettings from '$lib/components/DashboardSettings.svelte';
@@ -620,6 +621,7 @@ templates/&lt;id&gt;.md                               templates for every projec
 		<OrderSettings />
 		<DashboardSettings />
 
-		<div class="hint" style="padding:0 4px 8px">Ledger {settings.version}</div>
+		<!-- The version, and updating Ledger -->
+		<AboutSettings />
 	</div>
 </div>

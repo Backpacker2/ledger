@@ -8,7 +8,9 @@
 	import ScreenshotModal from '$lib/components/ScreenshotModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Toasts from '$lib/components/Toasts.svelte';
+	import UpdateNotice from '$lib/components/UpdateNotice.svelte';
 	import { drawer, initTheme, startBackendEvents } from '$lib/ui.svelte';
+	import { startUpdates } from '$lib/updates.svelte';
 	import Wordmark from '$lib/components/Wordmark.svelte';
 	import type { LayoutData } from './$types';
 
@@ -20,7 +22,12 @@
 	onMount(() => {
 		if (bare) return;
 		initTheme();
-		return startBackendEvents();
+		const stopEvents = startBackendEvents();
+		const stopUpdates = startUpdates();
+		return () => {
+			stopEvents();
+			stopUpdates();
+		};
 	});
 </script>
 
@@ -40,6 +47,7 @@
 	</div>
 
 	<ScreenshotModal projects={data.projects} />
+	<UpdateNotice />
 	<Dialogs />
 	<Toasts />
 {/if}

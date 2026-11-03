@@ -105,6 +105,32 @@ fn vault_root(app: &App) -> PathBuf {
     app.lock().vault.root().to_path_buf()
 }
 
+// ---- restarting to install an update (see `updates.rs`) ---------------------------------------------
+
+/// The prompts Claude Code is running now, by title.
+pub fn running(app: &AppHandle) -> Vec<String> {
+    app.try_state::<Runs>().map(|runs| runs.running().into_iter().map(|r| r.prompt_title).collect()).unwrap_or_default()
+}
+
+/// Stops every run still going, each once: asking again while one is being stopped changes nothing.
+pub fn stop_all(app: &AppHandle) {
+    if let Some(runs) = app.try_state::<Runs>() {
+        for run in runs.running() {
+            let _ = runs.cancel(&run.id);
+        }
+    }
+}
+
+/// Before the restart: succeeds when no run is going, and none can start after. Otherwise the prompts still running.
+pub fn hold_for_restart(app: &AppHandle) -> std::result::Result<(), Vec<String>> {
+    manager(app).hold_for_restart().map_err(|going| going.into_iter().map(|r| r.prompt_title).collect())
+}
+
+/// The restart didn't happen: runs can start again.
+pub fn release_hold(app: &AppHandle) {
+    manager(app).release_hold();
+}
+
 // ---- settings and the check -------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]

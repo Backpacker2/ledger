@@ -19,6 +19,7 @@
 	import { listOrder } from '$lib/order.svelte';
 	import { dirOf } from '$lib/vaultImages';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';
+	import { beforeRestart } from '$lib/updates.svelte';
 	import type { Bump, MmmLevel } from '$lib/types';
 	import type { PageData } from './$types';
 
@@ -93,6 +94,9 @@
 		clearTimeout(renderTimer);
 		void flush();
 	});
+
+	// Installing an update restarts Ledger: what is typed and still waiting for the autosave is saved first.
+	$effect(() => beforeRestart(flush));
 
 	// ---- view mode -----------------------------------------------------------------------------
 
