@@ -977,6 +977,40 @@ fn a_prompt_runs_once_at_a_time_and_only_a_few_runs_go_at_once() {
 }
 
 #[test]
+fn once_a_restart_for_an_update_is_decided_no_run_can_start_until_it_is_called_off() {
+    let f = Fixture::new();
+    let rig = Rig::new();
+    let run = rig.start(&f).unwrap();
+    assert_eq!(rig.runs.running().len(), 1);
+
+    // A run is going: the restart can't be held, and is told which.
+    let going = rig.runs.hold_for_restart().unwrap_err();
+    assert_eq!(going.iter().map(|r| r.prompt_title.as_str()).collect::<Vec<_>>(), ["Call summary"]);
+    // Refusing the hold didn't stop new runs.
+    let extra = f.more_prompts(1);
+    let second = rig.start_with(&f, &extra[0], ClaudeSettings::default()).unwrap();
+
+    rig.runs.cancel_all();
+    rig.wait_for(&run.id, Status::Cancelled);
+    rig.wait_for(&second.id, Status::Cancelled);
+    assert!(rig.runs.running().is_empty());
+
+    // Nothing going: held, and from then on nothing starts, so nothing can be cut off by the restart.
+    rig.runs.hold_for_restart().unwrap();
+    let spawned = rig.runner.spawned();
+    let refused = rig.start(&f).unwrap_err().to_string();
+    assert!(refused.contains("restarting to install an update"), "{refused}");
+    assert_eq!(rig.runner.spawned(), spawned, "no process was started");
+    assert!(rig.runs.running().is_empty());
+
+    // The install failed after all: runs start again.
+    rig.runs.release_hold();
+    let after = rig.start(&f).unwrap();
+    rig.runs.cancel_all();
+    rig.wait_for(&after.id, Status::Cancelled);
+}
+
+#[test]
 fn runs_are_listed_with_their_output_for_a_window_that_was_away() {
     let f = Fixture::new();
     let rig = Rig::new();

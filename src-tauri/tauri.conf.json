@@ -37,6 +37,13 @@
       }
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://github.com/openledger-nl/ledger/releases/latest/download/latest.json"],
+      "pubkey": "REPLACE-WITH-THE-UPDATER-PUBLIC-KEY from pnpm tauri signer generate (until then, release builds never look for updates)",
+      "requireSignedVersion": true
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

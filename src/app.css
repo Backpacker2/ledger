@@ -434,6 +434,7 @@ mark { background: var(--highlight); color: inherit; border-radius: 3px; padding
 .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; font-size: 13px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; word-break: break-all; }
+.kv .dot { display: inline-block; margin-right: 4px; vertical-align: baseline; }
 
 /* ---------- modal, toasts ---------- */
 .modal-scrim { position: fixed; inset: 0; z-index: 50; background: var(--scrim); display: grid; grid-template-rows: minmax(0, 1fr); place-items: center; padding: 20px; }
@@ -449,6 +450,39 @@ mark { background: var(--highlight); color: inherit; border-radius: 3px; padding
 .toasts { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 80; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast { background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 13px; max-width: 80vw; box-shadow: var(--shadow-toast); }
 .toast.error { background: var(--red); color: var(--red-ink); }
+
+/* ---------- the update notice: a card in the corner, under modals and toasts ---------- */
+.update-notice {
+	position: fixed; right: 20px; bottom: 20px; z-index: 45;
+	width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 40px);
+	display: flex; flex-direction: column; gap: 10px;
+	background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius);
+	padding: 14px 16px; box-shadow: var(--shadow-toast);
+}
+.update-notice.major { border-color: var(--amber); }
+.un-head { display: flex; gap: 10px; align-items: flex-start; }
+.un-icon { color: var(--accent); display: inline-flex; padding-top: 1px; }
+.update-notice.major .un-icon { color: var(--amber); }
+.un-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.un-title strong { font-size: 14px; }
+.un-sub { font-size: 12px; color: var(--muted); }
+.update-notice .icon-btn { color: var(--muted); }
+.update-notice .icon-btn:hover { background: var(--card-2); color: var(--ink); }
+.un-major { display: flex; gap: 8px; align-items: flex-start; background: var(--amber-soft); color: var(--amber); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
+.un-major .lucide-icon { margin-top: 2px; }
+.un-body { display: flex; flex-direction: column; gap: 10px; min-height: 0; max-height: 280px; overflow-y: auto; overscroll-behavior: contain; }
+.un-breaking { background: var(--red-soft); border-left: 3px solid var(--red); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+.un-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--red); margin-bottom: 4px; }
+.un-notes { font-size: 13px; }
+.un-notes .md h3, .un-breaking .md h3 { font-size: 12px; font-weight: 700; color: var(--muted); margin: 0.9em 0 0.3em; }
+.un-foot { display: flex; gap: 8px; flex-wrap: wrap; }
+.un-status { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--muted); }
+.un-status .dot { display: inline-block; margin-right: 4px; }
+.un-progress { height: 6px; border-radius: 999px; background: var(--card-2); overflow: hidden; }
+.un-progress span { display: block; height: 100%; background: var(--accent); transition: width 0.15s; }
+@media (max-width: 760px) {
+	.update-notice { left: 16px; right: 16px; bottom: 16px; width: auto; }
+}
 
 /* ---------- narrow windows: the sidebar becomes a drawer ---------- */
 @media (max-width: 760px) {

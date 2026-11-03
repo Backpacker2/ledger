@@ -1,8 +1,9 @@
 //! Where the vault is, and the settings that live in it.
 //!
 //! The vault's location is the one thing that can't live in the vault, so it is kept in a small `config.json` in
-//! the app's config folder. Everything else belongs to the vault and sits in `<vault>/.ledger/`, which the vault's
-//! `.gitignore` lists, so none of it is ever pushed to GitHub:
+//! the app's config folder, together with the other choice that belongs to this machine's copy of Ledger rather than
+//! to a vault: whether it looks for updates by itself. Everything else belongs to the vault and sits in
+//! `<vault>/.ledger/`, which the vault's `.gitignore` lists, so none of it is ever pushed to GitHub:
 //!
 //! ```text
 //! .ledger/settings.json     the repository, the branch, the screenshot hotkey and tool, whether sync encrypts
@@ -34,6 +35,29 @@ const DEFAULT_GITIGNORE: &str = "\
 #[serde(rename_all = "camelCase", default)]
 pub struct AppConfig {
     pub vault_path: Option<String>,
+    /// Read leniently: a value edited into something else by hand falls back to the default instead of making the
+    /// whole file unreadable, which would also lose the vault's location.
+    #[serde(deserialize_with = "lenient")]
+    pub updates: UpdateConfig,
+}
+
+fn lenient<'de, D: serde::Deserializer<'de>, T: serde::de::DeserializeOwned + Default>(deserializer: D) -> std::result::Result<T, D::Error> {
+    Ok(serde_json::from_value(serde_json::Value::deserialize(deserializer)?).unwrap_or_default())
+}
+
+/// Looking for new releases (see `updates.rs`). Per machine, so not in the vault: it is about the program installed
+/// here, it must not change when another vault is opened, and an update never touches this file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UpdateConfig {
+    /// Look shortly after starting and every few hours. A check from Settings works either way.
+    pub automatic: bool,
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        UpdateConfig { automatic: true }
+    }
 }
 
 fn config_file(dir: &Path) -> PathBuf {

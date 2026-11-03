@@ -117,13 +117,47 @@ The built-in capture on Windows is exercised end to end. The macOS paths, and th
 
 ## Running it
 
+Install a release to use Ledger and get updates from inside the app; build it from source to work on it.
+
+### Installing a release
+
+Every [release](https://github.com/openledger-nl/ledger/releases) carries installers:
+
+| System | Download |
+|---|---|
+| Windows (64-bit) | `Ledger_X.Y.Z_x64-setup.exe`: installs for your account only, no administrator needed |
+| macOS (Apple silicon and Intel) | `Ledger_X.Y.Z_universal.dmg`: open it and drag Ledger to Applications |
+| Linux (x86-64) | `Ledger_X.Y.Z_amd64.AppImage` (`chmod +x` it and run it), or the `.deb` / `.rpm` for your package manager |
+
+The installers aren't signed with a Windows or Apple developer certificate yet, so the first start needs one extra step:
+
+- **Windows**: SmartScreen says "Windows protected your PC". Click **More info**, then **Run anyway**. Your browser may also ask whether to keep the download.
+- **macOS**: the first time you open Ledger, macOS says it can't check it for malicious software and won't open it. Click **Done**, open **System Settings → Privacy & Security**, find "Ledger was blocked to protect your Mac" and click **Open Anyway**, then confirm. (Before macOS 15, right-clicking Ledger in Applications and choosing **Open** also works.) Without a developer certificate, macOS may ask again for the Screen Recording permission after an update.
+- **Linux**: nothing extra. The `.deb` and `.rpm` also add the desktop entry that *Open with* uses (see [Screenshots](#screenshots)).
+
+Updates don't need these steps again: Ledger downloads them itself and checks their signature.
+
+### Updates
+
+Ledger looks for a new release shortly after it starts and every few hours. When one is out, a notice in the corner shows the version and what changed, with **Install and restart** and **Later**. A major version (the first number goes up) and its breaking changes stand out: something you rely on may work differently afterwards. **Later** hides the notice until the next check. Nothing is installed until you click **Install and restart**.
+
+Installing downloads the new version and checks that it is signed with Ledger's key (the public half is built into the app, `plugins.updater` in `src-tauri/tauri.conf.json`); an update with a wrong or missing signature is refused, and the notice says so. It then waits until a restart cuts nothing off: a GitHub or Trello sync that is running finishes first, and if Claude Code is still running a prompt, you choose between waiting for it and stopping it. Then Ledger installs and restarts. Every change you make is written to the vault straight away, and changes not yet on GitHub are pushed when Ledger starts again. An update replaces the program only: the vault, its `.ledger/` folder and Ledger's config are left alone.
+
+**Settings → About** shows the version you have and has **Check for updates**. To stop the automatic checks, untick **Check for updates automatically** there; **Check for updates** still works. The choice belongs to this computer, not to the vault: it is kept in Ledger's `config.json` in the app's config folder (next to the vault's location), so another computer syncing the same vault keeps its own.
+
+Ledger built from source with `pnpm run tauri dev` (or any debug build) never looks for updates; its Settings → About can simulate one, to try the notice. A release build you make yourself does look, and offers the official releases.
+
+### Building from source
+
 You need [Node.js](https://nodejs.org) 26 (the version in `.nvmrc`; `nvm use` picks it) with [pnpm](https://pnpm.io) (`corepack enable` activates the version pinned in `package.json`), a Rust toolchain and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your platform (on Windows: the MSVC build tools and WebView2).
 
 ```bash
 pnpm install
 pnpm run tauri dev     # the app, with hot reload
-pnpm run tauri build   # an installer / bundle
+pnpm run tauri build   # an installer / bundle for this machine
 ```
+
+A local `tauri build` makes the installers but not the updater's signatures: those need the private key, which only CI has.
 
 Checks:
 
@@ -132,7 +166,7 @@ pnpm test              # Rust: stores, vault round-trips, and the sync algorithm
 pnpm run check         # Svelte + TypeScript
 ```
 
-Environment variables, mostly for development: `LEDGER_VAULT` fixes the vault location (and locks it in Settings); `LEDGER_CONFIG_DIR` moves the per-machine settings (the vault location); `LEDGER_GITHUB_API` points the sync at another API base (GitHub Enterprise, or a mock).
+Environment variables, mostly for development: `LEDGER_VAULT` fixes the vault location (and locks it in Settings); `LEDGER_CONFIG_DIR` moves the per-machine settings (the vault location, whether to check for updates); `LEDGER_GITHUB_API` points the sync at another API base (GitHub Enterprise, or a mock).
 
 ## Versions and releases
 
@@ -149,7 +183,11 @@ the largest one wins:
 Commits that aren't conventional are left out; with none that count, there is no release. The version is written to
 `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `Cargo.lock` (the app shows the Cargo one), the
 notes go to [CHANGELOG.md](CHANGELOG.md), and CI commits that as `chore(release): vX.Y.Z`, tags it `vX.Y.Z` and
-publishes a GitHub release. Don't bump versions by hand.
+creates the GitHub release as a draft. It then builds the installers from the tag on Windows, macOS and Linux, signs
+them for the updater with the key in the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, uploads them with their `.sig` files and the `latest.json` the app reads, and
+publishes the release once every platform has been built. A release whose build failed stays a draft, which the app
+never sees. Don't bump versions by hand.
 
 ```bash
 pnpm release:preview   # what the next release would be, and its notes; changes nothing
@@ -163,6 +201,7 @@ src/                     SvelteKit frontend (static SPA)
                          stories, board, templates · templates · search · settings
   lib/api.ts             typed wrappers over the Tauri commands
   lib/ui.svelte.ts       toasts, dialogs, theme, and the backend's sync/vault/screenshot events
+  lib/updates.svelte.ts  the update notice's state, and installing (waits, then restarts)
   lib/components/        sidebar tree, post/prompt/feedback/upload cards, composer, modals, hotkey recorder …
   routes/screenshot-overlay  the built-in capture's region picker (its own window; not used on Linux)
 scripts/release.mjs      the next version from the conventional commits (run by CI)
@@ -178,6 +217,7 @@ src-tauri/src/
   github.rs              the GitHub REST implementation of `Remote`
   syncer.rs              the background worker: debounce, poll, retry, status events
   screenshot.rs          hotkey, your own tool, pictures opened with Ledger, the built-in capture; Linux portals
+  updates.rs             looking for releases, the notice's view of one, and when it is safe to install and restart
   state.rs commands.rs   the running app and the thin Tauri command layer
   markdown.rs            markdown → HTML; raw HTML is escaped and unsafe link targets dropped
   tests*.rs              behaviour tests

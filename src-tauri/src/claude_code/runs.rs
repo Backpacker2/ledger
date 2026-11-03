@@ -280,6 +280,9 @@ struct Inner {
     runner: Arc<dyn Runner>,
     host: Arc<dyn Host>,
     runs: Mutex<Vec<Arc<Run>>>,
+    /// Ledger is about to restart to install an update: no run may start. Read and set under the `runs` lock, so a
+    /// run either is in the list when the hold is taken or doesn't start.
+    held: AtomicBool,
 }
 
 #[derive(Clone)]
@@ -289,12 +292,39 @@ pub struct Runs {
 
 impl Runs {
     pub fn new(runner: Arc<dyn Runner>, host: Arc<dyn Host>) -> Runs {
-        Runs { inner: Arc::new(Inner { runner, host, runs: Mutex::new(Vec::new()) }) }
+        Runs { inner: Arc::new(Inner { runner, host, runs: Mutex::new(Vec::new()), held: AtomicBool::new(false) }) }
+    }
+
+    /// The runs still going.
+    pub fn running(&self) -> Vec<RunView> {
+        lock(&self.inner.runs).iter().filter(|r| r.is_running()).map(|r| r.view()).collect()
+    }
+
+    /// For a restart: succeeds when no run is going, and from then on none can start until [`Runs::release_hold`].
+    /// Otherwise the runs still going.
+    pub fn hold_for_restart(&self) -> std::result::Result<(), Vec<RunView>> {
+        let runs = lock(&self.inner.runs);
+        let going: Vec<RunView> = runs.iter().filter(|r| r.is_running()).map(|r| r.view()).collect();
+        if !going.is_empty() {
+            return Err(going);
+        }
+        self.inner.held.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    /// The restart didn't happen after all: runs can start again.
+    pub fn release_hold(&self) {
+        let _runs = lock(&self.inner.runs);
+        self.inner.held.store(false, Ordering::SeqCst);
     }
 
     /// Starts a run in the background. Fails, without starting anything, if Claude Code can't be found, if this prompt
     /// is already running, or if the limit on runs at once is reached.
     pub fn start(&self, mut request: RunRequest, ctx: RunContext, search: &Search) -> Result<RunView> {
+        // Checked again under the lock below; this saves writing the guard file for nothing.
+        if self.inner.held.load(Ordering::SeqCst) {
+            return Err(restarting());
+        }
         let program = cli::resolve(&ctx.settings.cli_path, search)?;
         let _ = settings::ensure_gitignore(&ctx.root);
         let guard = if ctx.settings.confine { Some(write_guard(&ctx)?) } else { None };
@@ -313,6 +343,9 @@ impl Runs {
         request.run_id = run.id.clone();
         {
             let mut runs = lock(&self.inner.runs);
+            if self.inner.held.load(Ordering::SeqCst) {
+                return Err(restarting());
+            }
             if runs.iter().any(|r| r.is_running() && r.is_for(&request)) {
                 return Err(Error::invalid("This prompt is already running in Claude Code"));
             }
@@ -396,6 +429,10 @@ impl Runs {
             }
         }
     }
+}
+
+fn restarting() -> Error {
+    Error::invalid("Ledger is restarting to install an update. Run the prompt again once it is back.")
 }
 
 /// The environment the program is started with: the app's own, plus no colour codes in the output, and the folder the

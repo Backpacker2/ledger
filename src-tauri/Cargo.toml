@@ -37,6 +37,8 @@ aes-gcm = { version = "0.11.1", features = ["zeroize"] }
 flate2 = "1.1.10"
 sha2 = "0.11.1"
 zeroize = "1.9.1"
+# Installing new releases from inside the app (`updates.rs`). Registered in release builds only, see `lib.rs`.
+tauri-plugin-updater = "2"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

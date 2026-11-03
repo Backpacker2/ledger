@@ -246,3 +246,19 @@ export const trelloApi = {
 	trelloRelinkItem: (project: string, kind: 'task' | 'story', id: string) =>
 		call<TrelloView>('trello_relink_item', { project, kind, id })
 };
+
+// ---- Updating Ledger from inside the app (see src-tauri/src/updates.rs) -----------------------------
+
+import type { InstallStep, RunsChoice, UpdateCheck, UpdateInfo, UpdateView } from './types';
+
+export const updatesApi = {
+	status: () => call<UpdateView>('update_status'),
+	/** Whether to look for updates by itself; kept for this machine, not in the vault. */
+	saveSettings: (automatic: boolean) => call<UpdateView>('save_update_settings', { automatic }),
+	/** Looks now, whether or not automatic checks are on. */
+	check: () => call<UpdateCheck>('check_for_updates'),
+	/** Downloads (once), waits for syncs and runs, installs and restarts. Call again while the answer is to wait. */
+	install: (choice: RunsChoice) => call<InstallStep>('install_update', { choice }),
+	/** Development builds only: pretend a release was found. */
+	simulate: (major: boolean) => call<UpdateInfo>('simulate_update', { major })
+};
