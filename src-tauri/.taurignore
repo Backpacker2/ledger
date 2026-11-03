@@ -1,0 +1,4 @@
+# `tauri dev` rebuilds and restarts the app when a file under src-tauri changes. The test build goes to
+# target-test (cargo test --target-dir src-tauri/target-test) so it never fights the dev app for the build folder;
+# without this, running the tests would restart the app each time.
+target-test/
