@@ -8,6 +8,7 @@ import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 import Wrench from '@lucide/svelte/icons/wrench';
 import Info from '@lucide/svelte/icons/info';
 import ScrollText from '@lucide/svelte/icons/scroll-text';
+import AboutSettings from './AboutSettings.svelte';
 import CaptureSettings from './CaptureSettings.svelte';
 import ClaudeCodeSettings from './ClaudeCodeSettings.svelte';
 import DashboardSettings from './DashboardSettings.svelte';
@@ -54,6 +55,7 @@ export const panels: Panel[] = [
 	{ id: 'trello', group: 'sync', title: 'Sync with Trello', keywords: 'trello cards board tasks stories api key token person', component: TrelloSettings },
 	{ id: 'screenshots', group: 'tools', title: 'Screenshots', keywords: 'screenshot hotkey shortcut flameshot capture picture tool command print', component: ScreenshotSettings },
 	{ id: 'claude', group: 'tools', title: 'Claude Code', keywords: 'claude ai prompt run model permission guard rails cli program auto edit plan read', component: ClaudeCodeSettings },
+	{ id: 'about', group: 'about', title: 'About Ledger', keywords: 'about version info project source code releases changelog machine paths config build', component: AboutSettings },
 	{ id: 'updates', group: 'about', title: 'Updates', keywords: 'update updates upgrade new version release install check automatic', component: UpdateSettings },
 	{ id: 'yell', group: 'logs', title: 'Yell at the app', keywords: 'yell report bug issue error github ai prompt copy problem broken', component: YellSettings },
 	{ id: 'capture', group: 'logs', title: 'Debug capture', keywords: 'debug capture record recording start stop steps developer send file', component: CaptureSettings },
