@@ -95,7 +95,7 @@ repo (`build: move to Node 26`).
 | The main features | `projects`, `threads`, `prompts`, `feedback`, `deliverables`, `uploads`, `stories`, `board`, `templates`, `search` |
 | Data and sync | `vault`, `sync`, `crypto`, `settings` |
 | Integrations | `screenshots`, `trello`, `claude` (runs with Claude Code) |
-| Across the app | `ui` (shared components, layout, icons), `brand` (logo, tokens, colours) |
+| Across the app | `ui` (shared components, layout, icons), `brand` (logo, tokens, colours), `logs` (the error log, debug captures, reporting a problem) |
 | Reserved | `release`: only CI's own `chore(release)` commits; never use it yourself |
 
 - Name the scope after what the user sees, not the file: a fix in `syncer.rs` is `fix(sync)`.

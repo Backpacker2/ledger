@@ -7,25 +7,30 @@ import Palette from '@lucide/svelte/icons/palette';
 import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 import Wrench from '@lucide/svelte/icons/wrench';
 import Info from '@lucide/svelte/icons/info';
+import ScrollText from '@lucide/svelte/icons/scroll-text';
+import CaptureSettings from './CaptureSettings.svelte';
 import ClaudeCodeSettings from './ClaudeCodeSettings.svelte';
 import DashboardSettings from './DashboardSettings.svelte';
 import EncryptionSettings from './EncryptionSettings.svelte';
 import GitHubSettings from './GitHubSettings.svelte';
+import LogSettings from './LogSettings.svelte';
 import OrderSettings from './OrderSettings.svelte';
 import ScreenshotSettings from './ScreenshotSettings.svelte';
 import ThemeSettings from './ThemeSettings.svelte';
 import TrelloSettings from './TrelloSettings.svelte';
 import UpdateSettings from './UpdateSettings.svelte';
 import VaultSettings from './VaultSettings.svelte';
+import YellSettings from './YellSettings.svelte';
 
-export type GroupId = 'features' | 'visual' | 'sync' | 'tools' | 'about';
+export type GroupId = 'features' | 'visual' | 'sync' | 'tools' | 'about' | 'logs';
 
 export const groups: { id: GroupId; label: string; icon: Component }[] = [
 	{ id: 'features', label: 'Features', icon: Sparkles },
 	{ id: 'visual', label: 'Visual', icon: Palette },
 	{ id: 'sync', label: 'Sync & external', icon: RefreshCw },
 	{ id: 'tools', label: 'Tools', icon: Wrench },
-	{ id: 'about', label: 'About', icon: Info }
+	{ id: 'about', label: 'About', icon: Info },
+	{ id: 'logs', label: 'Logs', icon: ScrollText }
 ];
 
 export interface Panel {
@@ -50,6 +55,9 @@ export const panels: Panel[] = [
 	{ id: 'screenshots', group: 'tools', title: 'Screenshots', keywords: 'screenshot hotkey shortcut flameshot capture picture tool command print', component: ScreenshotSettings },
 	{ id: 'claude', group: 'tools', title: 'Claude Code', keywords: 'claude ai prompt run model permission guard rails cli program auto edit plan read', component: ClaudeCodeSettings },
 	{ id: 'updates', group: 'about', title: 'Updates', keywords: 'update updates upgrade new version release install check automatic', component: UpdateSettings },
+	{ id: 'yell', group: 'logs', title: 'Yell at the app', keywords: 'yell report bug issue error github ai prompt copy problem broken', component: YellSettings },
+	{ id: 'capture', group: 'logs', title: 'Debug capture', keywords: 'debug capture record recording start stop steps developer send file', component: CaptureSettings },
+	{ id: 'log', group: 'logs', title: 'Log', keywords: 'logs debug errors problems clear folder size limit megabytes', component: LogSettings }
 ];
 
 /** The panels every word of `query` appears in (in the title, the keywords or the group's name). */

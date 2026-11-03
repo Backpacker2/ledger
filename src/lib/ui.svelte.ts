@@ -5,6 +5,7 @@ import { listen } from '@tauri-apps/api/event';
 import { invalidateAll } from '$app/navigation';
 import { api } from './api';
 import type { ScreenshotTaken, SyncStatus } from './types';
+import { captureDebug } from './log.svelte';
 
 // ---- toasts -----------------------------------------------------------------------------------------
 
@@ -18,6 +19,7 @@ export const toasts = $state<Toast[]>([]);
 let nextToastId = 1;
 
 export function toast(message: string, error = false) {
+	captureDebug('toast', error ? `error: ${message}` : message);
 	const id = nextToastId++;
 	toasts.push({ id, message, error });
 	setTimeout(() => {

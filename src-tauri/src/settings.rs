@@ -39,6 +39,9 @@ pub struct AppConfig {
     /// whole file unreadable, which would also lose the vault's location.
     #[serde(deserialize_with = "lenient")]
     pub updates: UpdateConfig,
+    /// The most the app's log may take on disk; unset means `applog::DEFAULT_MAX_BYTES`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_max_bytes: Option<u64>,
 }
 
 fn lenient<'de, D: serde::Deserializer<'de>, T: serde::de::DeserializeOwned + Default>(deserializer: D) -> std::result::Result<T, D::Error> {
