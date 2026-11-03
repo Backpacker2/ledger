@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0 (2026-11-03)
+
+### Features
+
+- **settings:** show what Ledger is and where it keeps things in the About tab ([b09b75a](https://github.com/openledger-nl/ledger/commit/b09b75ab2eebbea3fa93f18f6a5cc84272aa29bf))
+- **logs:** log errors on this machine and report them from a new Logs tab ([b701f71](https://github.com/openledger-nl/ledger/commit/b701f711ccd15e2276bad1887d3607c1017812b4))
+- **settings:** group the settings into tabs, with a search and on/off switches ([49edeb3](https://github.com/openledger-nl/ledger/commit/49edeb3681319411d2bcf2eced6445ebb67ea31a))
+
+### Other changes
+
+- change the app identifier to nl.openledger.ledger ([c6c1e3b](https://github.com/openledger-nl/ledger/commit/c6c1e3bffb3fa8b331d925d9849e33dea060d057))
+
 ## 0.6.0 (2026-11-03)
 
 ### Features
