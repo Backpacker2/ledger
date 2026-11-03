@@ -1,4 +1,8 @@
 <script lang="ts">
+	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import TaskModal from '$lib/components/TaskModal.svelte';
 	import { api } from '$lib/api';
 	import { threadUrl } from '$lib/actions';
@@ -120,8 +124,8 @@
 			<header>
 				<span class="title" title={column.id === board.backlogColumnId ? 'New tasks land here' : ''}>{column.name}</span>
 				<span class="count">{cards.length}</span>
-				<button class="icon-btn" title="Rename column" aria-label="Rename {column.name}" onclick={() => renameColumn(column)}>✎</button>
-				<button class="icon-btn" title="Delete column" aria-label="Delete {column.name}" onclick={() => deleteColumn(column)}>✕</button>
+				<button class="icon-btn" title="Rename column" aria-label="Rename {column.name}" onclick={() => renameColumn(column)}><Pencil size={14} /></button>
+				<button class="icon-btn" title="Delete column" aria-label="Delete {column.name}" onclick={() => deleteColumn(column)}><Trash2 size={14} /></button>
 			</header>
 			<div class="col-cards">
 				{#each cards as t (t.id)}
@@ -139,8 +143,8 @@
 						<div class="k-top">
 							{#if t.storyId}<span class="k-key" title={t.storySummary ?? ''}>{t.storyId}</span>{:else}<span></span>{/if}
 							<span class="k-arrows">
-								<button aria-label="Move left" disabled={ci === 0} onclick={(e) => { e.stopPropagation(); step(t, -1); }}>◀</button>
-								<button aria-label="Move right" disabled={ci === columns.length - 1} onclick={(e) => { e.stopPropagation(); step(t, 1); }}>▶</button>
+								<button aria-label="Move left" disabled={ci === 0} onclick={(e) => { e.stopPropagation(); step(t, -1); }}><ChevronLeft size={14} /></button>
+								<button aria-label="Move right" disabled={ci === columns.length - 1} onclick={(e) => { e.stopPropagation(); step(t, 1); }}><ChevronRight size={14} /></button>
 							</span>
 						</div>
 						<div class="k-title">{t.title}</div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import X from '@lucide/svelte/icons/x';
 	import { api } from '$lib/api';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';
 	import type { Criterion, Story, ThreadSummary } from '$lib/types';
@@ -122,7 +123,7 @@
 				<div class="crit-row" class:done={c.done}>
 					<input type="checkbox" bind:checked={c.done} aria-label="Met" />
 					<input type="text" bind:value={c.text} />
-					<button class="icon-btn" style="color:var(--muted)" aria-label="Remove criterion" onclick={() => criteria.splice(i, 1)}>✕</button>
+					<button class="icon-btn" style="color:var(--muted)" aria-label="Remove criterion" onclick={() => criteria.splice(i, 1)}><X size={16} /></button>
 				</div>
 			{/each}
 			<div class="crit-row">
@@ -146,7 +147,7 @@
 		<span>Threads</span>
 		<div class="chips">
 			{#each threadSlugs as slug (slug)}
-				<span class="chip">{titleOf(slug)}<button class="x" aria-label="Unlink {titleOf(slug)}" onclick={() => (threadSlugs = threadSlugs.filter((s) => s !== slug))}>✕</button></span>
+				<span class="chip">{titleOf(slug)}<button class="x" aria-label="Unlink {titleOf(slug)}" onclick={() => (threadSlugs = threadSlugs.filter((s) => s !== slug))}><X size={12} /></button></span>
 			{/each}
 			{#if unlinked.length}
 				<select

@@ -1,4 +1,8 @@
 <script lang="ts">
+	import ArrowDown from '@lucide/svelte/icons/arrow-down';
+	import ArrowUp from '@lucide/svelte/icons/arrow-up';
+	import Plus from '@lucide/svelte/icons/plus';
+	import X from '@lucide/svelte/icons/x';
 	import { api } from '$lib/api';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';
 	import type { Template } from '$lib/types';
@@ -75,14 +79,14 @@
 				<div class="q-row">
 					<textarea bind:value={questions[i]} rows="2" placeholder="A question to answer in the thread first"></textarea>
 					<div class="btns">
-						<button class="icon-btn" style="color:var(--muted)" aria-label="Move up" disabled={i === 0} onclick={() => move(i, -1)}>↑</button>
-						<button class="icon-btn" style="color:var(--muted)" aria-label="Move down" disabled={i === questions.length - 1} onclick={() => move(i, 1)}>↓</button>
-						<button class="icon-btn" style="color:var(--muted)" aria-label="Remove question" onclick={() => questions.splice(i, 1)}>✕</button>
+						<button class="icon-btn" style="color:var(--muted)" aria-label="Move up" disabled={i === 0} onclick={() => move(i, -1)}><ArrowUp size={16} /></button>
+						<button class="icon-btn" style="color:var(--muted)" aria-label="Move down" disabled={i === questions.length - 1} onclick={() => move(i, 1)}><ArrowDown size={16} /></button>
+						<button class="icon-btn" style="color:var(--muted)" aria-label="Remove question" onclick={() => questions.splice(i, 1)}><X size={16} /></button>
 					</div>
 				</div>
 			{/each}
 		</div>
-		<div><button class="btn small ghost" onclick={() => questions.push('')}>+ Add question</button></div>
+		<div><button class="btn small ghost" onclick={() => questions.push('')}><Plus size={14} />Add question</button></div>
 	</div>
 	<label class="field">
 		Deliverable skeleton

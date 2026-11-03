@@ -1,4 +1,9 @@
 <script lang="ts">
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import House from '@lucide/svelte/icons/house';
+	import LayoutTemplate from '@lucide/svelte/icons/layout-template';
+	import Plus from '@lucide/svelte/icons/plus';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { newProjectFlow, newThreadFlow, projectUrl, threadUrl } from '$lib/actions';
@@ -88,12 +93,12 @@
 		<input type="search" placeholder="Search everything…" autocomplete="off" spellcheck="false" bind:value={query} />
 	</form>
 
-	<a class="nav-item" class:active={path === '/'} href="/"><span class="nav-ico">⌂</span>Home</a>
-	<a class="nav-item" class:active={on('/templates')} href="/templates"><span class="nav-ico">❖</span>Templates</a>
+	<a class="nav-item" class:active={path === '/'} href="/"><span class="nav-ico"><House size={16} /></span>Home</a>
+	<a class="nav-item" class:active={on('/templates')} href="/templates"><span class="nav-ico"><LayoutTemplate size={16} /></span>Templates</a>
 
 	<div class="section-head">
 		<span>Projects</span>
-		<button class="icon-btn" title="New project" aria-label="New project" onclick={newProjectFlow}>+</button>
+		<button class="icon-btn" title="New project" aria-label="New project" onclick={newProjectFlow}><Plus size={16} /></button>
 	</div>
 	<nav class="space-list">
 		{#each projects as p (p.slug)}
@@ -105,7 +110,7 @@
 					aria-expanded={unfolded}
 					onclick={() => toggle(p.slug)}
 				>
-					{unfolded ? '▾' : '▸'}
+					{#if unfolded}<ChevronDown size={14} />{:else}<ChevronRight size={14} />{/if}
 				</button>
 				<a class="folder-link" href={projectUrl(p.slug)}>
 					<span class="name">{p.name}</span>
@@ -123,7 +128,7 @@
 					{:else}
 						<div class="space-empty">No threads yet</div>
 					{/each}
-					<button class="tree-item add" onclick={() => newThreadFlow(p.slug)}>＋ New thread</button>
+					<button class="tree-item add" onclick={() => newThreadFlow(p.slug)}><Plus size={14} />New thread</button>
 				</div>
 			{/if}
 		{:else}

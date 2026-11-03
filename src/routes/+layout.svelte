@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Menu from '@lucide/svelte/icons/menu';
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
@@ -28,7 +29,7 @@
 {:else}
 	<div class="app">
 		<header class="topbar">
-			<button class="icon-btn" aria-label="Menu" onclick={() => (drawer.open = true)}>☰</button>
+			<button class="icon-btn" aria-label="Menu" onclick={() => (drawer.open = true)}><Menu size={22} /></button>
 			<img src={wordmark} alt="Ledger" />
 		</header>
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->

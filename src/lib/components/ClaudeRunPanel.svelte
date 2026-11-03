@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	// "Run in Claude Code" for one prompt: the button, a confirmation that shows exactly what will be sent, and
 	// the live state of the latest run (status, output, cancel). The run itself lives in the backend, so it goes
 	// on when this card is not on screen; the state it reports is kept in `claudeRuns`.
@@ -128,12 +129,12 @@
 
 	{#if history.length}
 		<details class="history">
-			<summary>Earlier runs ({history.length})</summary>
+			<summary><ChevronRight size={14} class="disclosure" />Earlier runs ({history.length})</summary>
 			<div class="past-list">
 				{#each history as past (past.id)}
 					<details class="past">
 						<summary>
-							<span class="dot {dots[past.status]}"></span>{labels[past.status]}
+							<ChevronRight size={14} class="disclosure" /><span class="dot {dots[past.status]}"></span>{labels[past.status]}
 							<span class="hint">
 								{time(past.startedAt)} · {clock(past.seconds)}{past.turns ? ` · ${past.turns} turn${past.turns === 1 ? '' : 's'}` : ''}{past.model
 									? ` · ${past.model}`
@@ -174,18 +175,18 @@
 		{/if}
 
 		<details open>
-			<summary>What will be sent</summary>
+			<summary><ChevronRight size={14} class="disclosure" />What will be sent</summary>
 			<div class="hint" style="margin:6px 0">This text goes to Claude Code on its standard input, exactly as shown.</div>
 			<pre class="mono sent">{shown.prompt}</pre>
 		</details>
 		<details>
-			<summary>The command</summary>
+			<summary><ChevronRight size={14} class="disclosure" />The command</summary>
 			<div class="hint" style="margin:6px 0">Shown for reading. It is started directly with these arguments, never through a shell.</div>
 			<pre class="mono sent">{shown.command}</pre>
 		</details>
 		{#if shown.guard}
 			<details>
-				<summary>The guard rails</summary>
+				<summary><ChevronRight size={14} class="disclosure" />The guard rails</summary>
 				<div class="hint" style="margin:6px 0">The settings file given with <code>--settings</code>.</div>
 				<pre class="mono sent">{shown.guard}</pre>
 			</details>

@@ -134,6 +134,14 @@ h1, h2, h3 { margin: 0; }
 }
 .icon-btn { background: none; border: 0; color: var(--side-muted); font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: 6px; }
 .icon-btn:hover { background: var(--side-hover); color: var(--side-ink); }
+/* Icons are Lucide (@lucide/svelte) SVGs; buttons that hold only an icon centre it. */
+.lucide-icon { flex-shrink: 0; }
+.icon-btn, .chip .x, .folder-toggle, .k-arrows button, .reply-bar .link { display: inline-flex; align-items: center; justify-content: center; }
+/* Collapsible sections show a Lucide chevron instead of the browser's triangle; it turns when open. */
+summary { list-style: none; display: flex; align-items: center; gap: 4px; }
+summary::-webkit-details-marker { display: none; }
+summary .disclosure { color: var(--muted); transition: transform 0.15s; }
+details[open] > summary .disclosure { transform: rotate(90deg); }
 .search-wrap { padding: 0 2px 8px; }
 .search-wrap input { width: 100%; background: var(--side-well); border: 1px solid var(--side-edge); border-radius: 8px; padding: 8px 10px; color: var(--side-bright); font-size: 13px; outline: none; }
 .search-wrap input:focus { border-color: var(--accent); }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import X from '@lucide/svelte/icons/x';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
 	import { baseName, deliverableUrl } from '$lib/actions';
@@ -85,7 +86,7 @@
 					{:else}
 						<span title="This file is no longer in the project">{baseName(d.path)} (missing)</span>
 					{/if}
-					<button class="x" aria-label="Unlink {baseName(d.path)}" onclick={() => unlink(d.path)}>✕</button>
+					<button class="x" aria-label="Unlink {baseName(d.path)}" onclick={() => unlink(d.path)}><X size={12} /></button>
 				</span>
 			{:else}
 				<span class="hint">Nothing produced yet</span>

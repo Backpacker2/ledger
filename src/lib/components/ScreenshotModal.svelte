@@ -147,7 +147,7 @@
 					Thread
 					<select bind:value={thread}>
 						{#each chosen?.threads ?? [] as t (t.slug)}<option value={t.slug}>{t.title}</option>{/each}
-						<option value={NEW}>＋ New thread…</option>
+						<option value={NEW}>+ New thread…</option>
 					</select>
 				</label>
 			</div>

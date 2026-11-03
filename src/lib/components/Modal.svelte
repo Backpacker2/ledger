@@ -4,6 +4,7 @@
 </script>
 
 <script lang="ts">
+	import X from '@lucide/svelte/icons/x';
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -39,7 +40,7 @@
 	<div class="modal" class:wide role="dialog" aria-modal="true" aria-label={title} bind:this={root}>
 		<div class="modal-head">
 			<h2>{title}</h2>
-			<button class="icon-btn" aria-label="Close" onclick={onclose}>✕</button>
+			<button class="icon-btn" aria-label="Close" onclick={onclose}><X size={18} /></button>
 		</div>
 		<div class="modal-body">{@render children()}</div>
 		{#if footer}<div class="modal-foot">{@render footer()}</div>{/if}

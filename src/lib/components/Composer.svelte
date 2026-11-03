@@ -1,4 +1,5 @@
 <script lang="ts">
+	import X from '@lucide/svelte/icons/x';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { api } from '$lib/api';
 	import { plainText, time } from '$lib/format';
@@ -78,7 +79,7 @@
 	{#if replyTo}
 		<div class="reply-bar">
 			<span><b>Replying to {time(replyTo.createdAt)}:</b> {plainText(replyTo.body, 160)}</span>
-			<button class="link" aria-label="Cancel reply" onclick={oncancelreply}>✕</button>
+			<button class="link" aria-label="Cancel reply" onclick={oncancelreply}><X size={14} /></button>
 		</div>
 	{/if}
 	<div class="toolbar">
