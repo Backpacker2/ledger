@@ -1,0 +1,56 @@
+# Every push to main is a release when it brings conventional commits: scripts/release.mjs works out the version
+# (breaking → major, feat → minor, any other type → patch), writes it into package.json, tauri.conf.json,
+# Cargo.toml, Cargo.lock and CHANGELOG.md, and this commits that as `chore(release): vX.Y.Z`, tags it and
+# publishes a GitHub release with the notes.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# One release at a time, in push order; a running release is never cancelled halfway.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # The release commit itself must not start another release. (Pushes made with GITHUB_TOKEN don't start
+    # workflows anyway; this keeps it so if the push is ever made with another token.)
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main # the newest main, so a queued run includes what was pushed after it was started
+          fetch-depth: 0 # the whole history and its tags, to find the last release
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Work out the version
+        id: version
+        run: node scripts/release.mjs --write
+
+      - name: Commit, tag and push
+        if: steps.version.outputs.released == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock CHANGELOG.md
+          git commit -m "chore(release): $TAG [skip ci]"
+          git tag -a "$TAG" -m "$TAG"
+          git push --atomic origin HEAD:main "$TAG"
+
+      - name: Publish the GitHub release
+        if: steps.version.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: gh release create "$TAG" --title "Ledger $TAG" --notes-file .release-notes.md --verify-tag

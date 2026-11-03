@@ -131,6 +131,27 @@ pnpm run check         # Svelte + TypeScript
 
 Environment variables, mostly for development: `LEDGER_VAULT` fixes the vault location (and locks it in Settings); `LEDGER_CONFIG_DIR` moves the per-machine settings (the vault location); `LEDGER_GITHUB_API` points the sync at another API base (GitHub Enterprise, or a mock).
 
+## Versions and releases
+
+Every push to `main` that brings [conventional commits](https://www.conventionalcommits.org) is released by CI
+([.github/workflows/release.yml](.github/workflows/release.yml)). The commits since the last release decide the bump,
+the largest one wins:
+
+| Commit | Bump | Example |
+|---|---|---|
+| a breaking change: `feat!:`, `fix(sync)!:`, or a `BREAKING CHANGE:` footer | major | 0.4.2 → 1.0.0 |
+| `feat:` | minor | 0.4.2 → 0.5.0 |
+| any other type: `fix`, `perf`, `refactor`, `docs`, `style`, `test`, `build`, `ci`, `chore`, `revert` | patch | 0.4.2 → 0.4.3 |
+
+Commits that aren't conventional are left out; with none that count, there is no release. The version is written to
+`package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `Cargo.lock` (the app shows the Cargo one), the
+notes go to [CHANGELOG.md](CHANGELOG.md), and CI commits that as `chore(release): vX.Y.Z`, tags it `vX.Y.Z` and
+publishes a GitHub release. Don't bump versions by hand.
+
+```bash
+pnpm release:preview   # what the next release would be, and its notes; changes nothing
+```
+
 ## Layout
 
 ```
@@ -141,6 +162,7 @@ src/                     SvelteKit frontend (static SPA)
   lib/ui.svelte.ts       toasts, dialogs, theme, and the backend's sync/vault/screenshot events
   lib/components/        sidebar tree, post/prompt/feedback/upload cards, composer, modals, hotkey recorder …
   routes/screenshot-overlay  the built-in capture's region picker (its own window; not used on Linux)
+scripts/release.mjs      the next version from the conventional commits (run by CI)
 src-tauri/src/
   schema.sql             the in-memory database's shape and rules
   projects.rs threads.rs posts.rs prompts.rs feedback.rs uploads.rs deliverables.rs templates.rs

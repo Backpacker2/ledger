@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo \"\"",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "release:preview": "node scripts/release.mjs",
     "tauri": "tauri",
     "test": "cargo test --manifest-path src-tauri/Cargo.toml"
   },
