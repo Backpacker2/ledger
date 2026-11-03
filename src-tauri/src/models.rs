@@ -301,6 +301,18 @@ pub struct Board {
     pub stories: Vec<StorySummary>,
 }
 
+// ---- activity ---------------------------------------------------------------------------------------
+
+/// One thing made in a project, at a moment: what the contribution graph counts.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityEvent {
+    pub project_slug: String,
+    /// thread, post, prompt, feedback, upload, version, run, story or task.
+    pub kind: String,
+    pub at: String,
+}
+
 // ---- search -----------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize)]

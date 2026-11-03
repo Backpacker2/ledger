@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0 (2026-11-03)
+
+### Features
+
+- contribution graph and dashboard update ([5a72938](https://github.com/openledger-nl/ledger/commit/5a72938ba1adba6e6a90d8572bd743b7e83aabc3))
+
 ## 0.4.0 (2026-11-03)
 
 ### Features

@@ -3,6 +3,7 @@
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import ClaudeCodeSettings from '$lib/components/ClaudeCodeSettings.svelte';
 	import HotkeyInput from '$lib/components/HotkeyInput.svelte';
+	import DashboardSettings from '$lib/components/DashboardSettings.svelte';
 	import OrderSettings from '$lib/components/OrderSettings.svelte';
 	import TrelloSettings from '$lib/components/TrelloSettings.svelte';
 	import { api } from '$lib/api';
@@ -617,6 +618,7 @@ templates/&lt;id&gt;.md                               templates for every projec
 
 		<!-- Display order of feedback and threads -->
 		<OrderSettings />
+		<DashboardSettings />
 
 		<div class="hint" style="padding:0 4px 8px">Ledger {settings.version}</div>
 	</div>
