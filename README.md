@@ -179,7 +179,7 @@ written through to the files, synced to GitHub) and answers the same commands ov
 to run on an always-on machine at home and be reached over [Tailscale](https://tailscale.com).
 
 ```bash
-cargo build --release --features server --bin ledger-server --manifest-path src-tauri/Cargo.toml
+cargo build --release --no-default-features --features server --bin ledger-server --manifest-path src-tauri/Cargo.toml
 LEDGER_VAULT=~/ledger-vault src-tauri/target/release/ledger-server     # listens on 127.0.0.1:8787
 tailscale serve --bg 8787                                              # https://<machine>.<tailnet>.ts.net
 ```
@@ -204,18 +204,21 @@ HTTP, events, the file picker, opening files) is in `src/lib/platform.ts`; impor
   against the `Tailscale-User-Login` header that `tailscale serve` adds).
 - It has no login of its own: keep it on `127.0.0.1` behind `tailscale serve`, never on a public address.
 
-To put it on a Mac at home (an Intel Mac mini, say) and keep it running there, from this machine:
+`--no-default-features` leaves Tauri out (the `desktop` feature), so the server links no GUI libraries. For Linux,
+`scripts/build-linux-server.sh [x86_64|aarch64]` cross-compiles it from a Mac in Docker.
+
+To put it on a machine at home (a Mac mini, or a Linux box) and keep it running there, from this machine:
 
 ```bash
 scripts/deploy-mini.sh <ssh-host>     # the Mac's Tailscale name, or a Host from ~/.ssh/config
 ```
 
-It builds the screens and the server for that Mac (`LEDGER_ARCH=x86_64` by default, `aarch64` for Apple silicon),
+It asks the machine what it is (macOS or Linux, Intel or ARM), builds the screens and the server for it,
 copies them to `~/ledger-server` there, writes `~/ledger-server/ledger-server.env` the first time (the vault
-`~/ledger-vault`, the port, `LEDGER_ALLOWED_LOGINS`; kept on later deploys), installs a LaunchAgent that starts it at
-login and restarts it if it stops, waits until it answers, and runs `tailscale serve --bg 8787`. Run it again to
-update. The other Mac only needs Tailscale and Remote Login (or Tailscale SSH); turn on automatic login there so it
-comes back after a power cut. `--package` only builds the bundle into `dist/`.
+`~/ledger-vault`, the port, `LEDGER_ALLOWED_LOGINS`; kept on later deploys), installs a service that restarts it if it stops (a LaunchAgent on macOS, a systemd user service with lingering on
+Linux), waits until it answers, and runs `tailscale serve --bg 8787`. Run it again to
+update. The machine only needs Tailscale and SSH (`LEDGER_SSH_KEY` picks the key). On a Mac, turn on automatic login so
+it comes back after a power cut. On Linux, `tailscale serve` needs `sudo tailscale set --operator=$USER` once. `--package` only builds the bundle into `dist/`.
 
 Then, on the phone: open the `https://<machine>.<tailnet>.ts.net` address it prints, fill the empty vault with
 **Settings → Sync & external → Sync to GitHub** (the same repository the desktop app syncs to), and add Ledger to the
