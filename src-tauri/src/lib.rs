@@ -108,6 +108,9 @@ pub fn run() {
                 }),
             );
             applog::info("app", format!("Ledger {} started on {} {}", env!("CARGO_PKG_VERSION"), std::env::consts::OS, std::env::consts::ARCH));
+            if std::env::var_os("LEDGER_CONFIG_DIR").is_none() && settings::adopt_old_config(&config_dir, settings::OLD_IDENTIFIER) {
+                applog::info("app", format!("Brought the settings over from the {} folder", settings::OLD_IDENTIFIER));
+            }
             let core = state::Core::open(config_dir.clone(), app.path().document_dir().ok())?;
             let sync = core.sync.clone();
             let core = Arc::new(Mutex::new(core));

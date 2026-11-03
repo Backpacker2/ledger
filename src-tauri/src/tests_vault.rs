@@ -722,3 +722,23 @@ fn a_vault_from_before_version_records_loads_as_it_was_and_is_not_rewritten() {
     assert_eq!(again.persist(&reloaded).unwrap(), 0);
     assert!(read(root, &format!("{project}/threads/call/posts/n1.md")).starts_with("---\nid: n1\nversionPublished: true"));
 }
+
+#[test]
+fn the_config_of_the_old_identifier_is_brought_over_once() {
+    let base = tempdir().unwrap();
+    let old = base.path().join(settings::OLD_IDENTIFIER);
+    let new = base.path().join("nl.openledger.ledger");
+    fs::create_dir_all(&old).unwrap();
+    fs::write(old.join("config.json"), r#"{"vaultPath":"/somewhere/else"}"#).unwrap();
+
+    assert!(settings::adopt_old_config(&new, settings::OLD_IDENTIFIER));
+    assert_eq!(settings::load_config(&new).vault_path.as_deref(), Some("/somewhere/else"));
+
+    // Once there is a config of its own, the old one is left alone.
+    settings::update_config(&new, |c| c.vault_path = Some("/chosen/later".into())).unwrap();
+    assert!(!settings::adopt_old_config(&new, settings::OLD_IDENTIFIER));
+    assert_eq!(settings::load_config(&new).vault_path.as_deref(), Some("/chosen/later"));
+
+    // Nothing to bring over: nothing happens.
+    assert!(!settings::adopt_old_config(&base.path().join("fresh"), "no.such.identifier"));
+}

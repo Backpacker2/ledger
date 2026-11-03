@@ -67,6 +67,21 @@ fn config_file(dir: &Path) -> PathBuf {
     dir.join("config.json")
 }
 
+/// The identifier Ledger had before `nl.openledger.ledger`; its config folder sits next to the current one.
+pub const OLD_IDENTIFIER: &str = "nl.molenbrugge.ledger";
+
+/// Brings the app's config over from the folder of an older identifier, once: when `dir` has none yet and the old
+/// folder next to it has one. Without it, a vault moved away from the default would be forgotten. Returns whether
+/// it was copied.
+pub fn adopt_old_config(dir: &Path, old_identifier: &str) -> bool {
+    let new_file = config_file(dir);
+    let Some(old_file) = dir.parent().map(|parent| config_file(&parent.join(old_identifier))) else { return false };
+    if new_file.exists() || !old_file.is_file() {
+        return false;
+    }
+    fs::create_dir_all(dir).is_ok() && fs::copy(&old_file, &new_file).is_ok()
+}
+
 pub fn load_config(dir: &Path) -> AppConfig {
     fs::read_to_string(config_file(dir)).ok().and_then(|text| serde_json::from_str(&text).ok()).unwrap_or_default()
 }
