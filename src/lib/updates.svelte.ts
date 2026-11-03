@@ -2,7 +2,7 @@
 // looks for releases by itself (release builds only) and says so with `update-available`; installing downloads the
 // update once, waits until a restart cuts nothing off, and ends in the restart (see src-tauri/src/updates.rs).
 
-import { listen } from '@tauri-apps/api/event';
+import { desktop, listen } from '$lib/platform';
 import { updatesApi } from './api';
 import type { RunsChoice, UpdateInfo, UpdateProgress } from './types';
 
@@ -71,6 +71,8 @@ export function later() {
 
 /** Listens for what the backend finds, and asks what it already found before the window was listening. */
 export function startUpdates(): () => void {
+	// Updates are installed into the desktop app; the phone gets the new screens when ledger-server is redeployed.
+	if (!desktop) return () => {};
 	const cleanups: Array<() => void> = [];
 	let alive = true;
 	const keep = (unlisten: () => void) => (alive ? cleanups.push(unlisten) : unlisten());

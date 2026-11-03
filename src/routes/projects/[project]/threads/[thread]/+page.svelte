@@ -14,6 +14,7 @@
 	import StoryModal from '$lib/components/StoryModal.svelte';
 	import UploadCard from '$lib/components/UploadCard.svelte';
 	import UploadModal from '$lib/components/UploadModal.svelte';
+	import type { Picked } from '$lib/platform';
 	import { date, dayKey, dayLabel, plural } from '$lib/format';
 	import { orderFlow } from '$lib/order';
 	import { listOrder } from '$lib/order.svelte';
@@ -90,7 +91,7 @@
 
 	let promptModal = $state<{ prompt: Prompt | null } | null>(null);
 	let feedbackOpen = $state(false);
-	let uploadPaths = $state<string[] | null>(null);
+	let uploadPaths = $state<Picked[] | null>(null);
 	let linking = $state(false);
 	let storiesOpen = $state(false);
 	let storyModal = $state<{ story: Story | null } | null>(null);

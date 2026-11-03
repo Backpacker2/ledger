@@ -2,6 +2,7 @@
 // and the search looks through all of it, so a new panel is added here once and is found both ways.
 
 import type { Component } from 'svelte';
+import { desktop } from '$lib/platform';
 import Sparkles from '@lucide/svelte/icons/sparkles';
 import Palette from '@lucide/svelte/icons/palette';
 import RefreshCw from '@lucide/svelte/icons/refresh-cw';
@@ -43,24 +44,32 @@ export interface Panel {
 	/** Every panel is given the settings; the ones that don't need them ignore them. */
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	component: Component<any>;
+	/** Needs the desktop app (the machine's folders, programs or screen); not shown on the phone. */
+	desktopOnly?: boolean;
 }
 
-export const panels: Panel[] = [
+const allPanels: Panel[] = [
 	{ id: 'dashboard', group: 'features', title: 'Contribution graph', keywords: 'dashboard home activity heatmap squares days', component: DashboardSettings },
 	{ id: 'theme', group: 'visual', title: 'Theme', keywords: 'colours colors dark light night appearance look accent', component: ThemeSettings },
 	{ id: 'order', group: 'visual', title: 'Order', keywords: 'sort newest oldest first lists posts threads feedback versions', component: OrderSettings },
-	{ id: 'vault', group: 'sync', title: 'Vault', keywords: 'folder location path obsidian markdown reload disk files switch', component: VaultSettings },
+	{ id: 'vault', group: 'sync', title: 'Vault', keywords: 'folder location path obsidian markdown reload disk files switch', component: VaultSettings, desktopOnly: true },
 	{ id: 'github', group: 'sync', title: 'Sync to GitHub', keywords: 'repository repo branch access token private push pull status sync now', component: GitHubSettings },
 	{ id: 'encryption', group: 'sync', title: 'Encryption', keywords: 'encrypt key recovery aes secret import export generate', component: EncryptionSettings },
-	{ id: 'trello', group: 'sync', title: 'Sync with Trello', keywords: 'trello cards board tasks stories api key token person', component: TrelloSettings },
-	{ id: 'screenshots', group: 'tools', title: 'Screenshots', keywords: 'screenshot hotkey shortcut flameshot capture picture tool command print', component: ScreenshotSettings },
-	{ id: 'claude', group: 'tools', title: 'Claude Code', keywords: 'claude ai prompt run model permission guard rails cli program auto edit plan read', component: ClaudeCodeSettings },
-	{ id: 'about', group: 'about', title: 'About Ledger', keywords: 'about version info project source code releases changelog machine paths config build', component: AboutSettings },
-	{ id: 'updates', group: 'about', title: 'Updates', keywords: 'update updates upgrade new version release install check automatic', component: UpdateSettings },
+	{ id: 'trello', group: 'sync', title: 'Sync with Trello', keywords: 'trello cards board tasks stories api key token person', component: TrelloSettings, desktopOnly: true },
+	{ id: 'screenshots', group: 'tools', title: 'Screenshots', keywords: 'screenshot hotkey shortcut flameshot capture picture tool command print', component: ScreenshotSettings, desktopOnly: true },
+	{ id: 'claude', group: 'tools', title: 'Claude Code', keywords: 'claude ai prompt run model permission guard rails cli program auto edit plan read', component: ClaudeCodeSettings, desktopOnly: true },
+	{ id: 'about', group: 'about', title: 'About Ledger', keywords: 'about version info project source code releases changelog machine paths config build', component: AboutSettings, desktopOnly: true },
+	{ id: 'updates', group: 'about', title: 'Updates', keywords: 'update updates upgrade new version release install check automatic', component: UpdateSettings, desktopOnly: true },
 	{ id: 'yell', group: 'logs', title: 'Yell at the app', keywords: 'yell report bug issue error github ai prompt copy problem broken', component: YellSettings },
 	{ id: 'capture', group: 'logs', title: 'Debug capture', keywords: 'debug capture record recording start stop steps developer send file', component: CaptureSettings },
 	{ id: 'log', group: 'logs', title: 'Log', keywords: 'logs debug errors problems clear folder size limit megabytes', component: LogSettings }
 ];
+
+/** The panels this window shows: all of them in the desktop app, the ones that work over ledger-server on the phone. */
+export const panels: Panel[] = desktop ? allPanels : allPanels.filter((p) => !p.desktopOnly);
+
+/** The tabs that have panels to show. */
+export const shownGroups = groups.filter((g) => panels.some((p) => p.group === g.id));
 
 /** The panels every word of `query` appears in (in the title, the keywords or the group's name). */
 export function searchPanels(query: string): Panel[] {

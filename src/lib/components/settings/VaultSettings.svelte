@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Where the vault lives on this machine: the folder, switching to another, and reloading it from disk.
-	import { open } from '@tauri-apps/plugin-dialog';
+	import { openDialog as open } from '$lib/platform';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import { api } from '$lib/api';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';

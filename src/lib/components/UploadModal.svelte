@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { api } from '$lib/api';
+	import { pickedName, type Picked } from '$lib/platform';
 	import { attempt, refresh, toast } from '$lib/ui.svelte';
 	import MarkdownEditor from './MarkdownEditor.svelte';
 	import Modal from './Modal.svelte';
 
 	/** Files picked in the file dialog, waiting for a description before they are copied into the project. */
-	let { project, thread, paths, onclose }: { project: string; thread: string; paths: string[]; onclose: () => void } = $props();
+	let { project, thread, paths, onclose }: { project: string; thread: string; paths: Picked[]; onclose: () => void } = $props();
 
 	let description = $state('');
 	let saving = $state(false);
 
-	const nameOf = (path: string) => path.split(/[\\/]/).pop() ?? path;
 
 	async function save() {
 		saving = true;
@@ -31,7 +31,7 @@
 
 <Modal title={paths.length === 1 ? 'Upload file' : `Upload ${paths.length} files`} {onclose}>
 	<ul style="margin:0;padding-left:18px">
-		{#each paths as p (p)}<li class="mono" title={p}>{nameOf(p)}</li>{/each}
+		{#each paths as p, i (i)}<li class="mono" title={typeof p === 'string' ? p : p.name}>{pickedName(p)}</li>{/each}
 	</ul>
 	<div class="field">
 		Description (optional{paths.length > 1 ? ', shared by all of them' : ''})

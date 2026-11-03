@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { desktop } from '$lib/platform';
 	import { onDestroy, untrack } from 'svelte';
 	import BookOpen from '@lucide/svelte/icons/book-open';
 	import CodeXml from '@lucide/svelte/icons/code-xml';
@@ -283,7 +284,7 @@
 			{#if isMarkdown}<button class="btn ghost small" onclick={copyMarkdown}>Copy markdown</button>{/if}
 			{#if doc.exists}
 				<button class="btn ghost small" onclick={() => open(false)}>Open</button>
-				<button class="btn ghost small" onclick={() => open(true)}>Show in folder</button>
+				{#if desktop}<button class="btn ghost small" onclick={() => open(true)}>Show in folder</button>{/if}
 			{/if}
 			{#if !snapshot && doc.exists}
 				<button class="btn ghost small danger" onclick={remove}>Delete</button>
@@ -364,7 +365,7 @@
 				</p>
 				<div class="row-end" style="justify-content:flex-start">
 					<button class="btn primary" onclick={() => open(false)}>Open</button>
-					<button class="btn" onclick={() => open(true)}>Show in folder</button>
+					{#if desktop}<button class="btn" onclick={() => open(true)}>Show in folder</button>{/if}
 				</div>
 			</div>
 		{/if}

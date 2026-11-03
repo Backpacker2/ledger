@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { openUrl } from '@tauri-apps/plugin-opener';
+	import { openUrl } from '$lib/platform';
 	import { imageLoader, isVaultSrc, type ImageBase } from '$lib/vaultImages';
 
 	/**

@@ -184,6 +184,12 @@ LEDGER_VAULT=~/ledger-vault src-tauri/target/release/ledger-server     # listens
 tailscale serve --bg 8787                                              # https://<machine>.<tailnet>.ts.net
 ```
 
+With `pnpm run build` and `LEDGER_STATIC=build`, the server also serves the screens: open its address in a browser
+and Ledger runs there as it does in the desktop app. Everything that differs between the two (commands over IPC or
+HTTP, events, the file picker, opening files) is in `src/lib/platform.ts`; import from there, not from
+`@tauri-apps/*`. In the browser the desktop-only settings panels (`desktopOnly` in `panels.ts`), Claude Code runs and
+"Show in folder" are hidden, and uploads go through the browser's own file picker (on a phone: photos and camera too).
+
 - `POST /api/<command>`: the command's arguments as a JSON object, named as the frontend sends them to `invoke`
   (camelCase). `200` with the result, `400` with the error message, `404` for a desktop-only command.
 - `GET /api/file?project=…&path=…`: a file in a project's folder. `POST /api/upload`: multipart `project`, `thread`,

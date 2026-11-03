@@ -2,7 +2,7 @@
 	// Where the app's log is, and how big it may get. It holds every error (a failed action on any screen, a sync or
 	// Trello round that went wrong, a crash) and is kept on this machine in the app's log folder, never in the vault.
 	import { onMount } from 'svelte';
-	import { revealItemInDir } from '@tauri-apps/plugin-opener';
+	import { revealItemInDir } from '$lib/platform';
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
 	import { logApi } from '$lib/api';
 	import { appLog } from '$lib/log.svelte';

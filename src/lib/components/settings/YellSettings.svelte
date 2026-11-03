@@ -2,7 +2,7 @@
 	// "Yell at the app": the latest error, ready to report as a GitHub issue (filled in, checked and sent by you in
 	// the browser) or to copy as a prompt for an AI assistant.
 	import { onMount } from 'svelte';
-	import { openUrl } from '@tauri-apps/plugin-opener';
+	import { openUrl } from '$lib/platform';
 	import Bug from '@lucide/svelte/icons/bug';
 	import Bot from '@lucide/svelte/icons/bot';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';

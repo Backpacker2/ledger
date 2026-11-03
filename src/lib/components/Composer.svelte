@@ -1,6 +1,6 @@
 <script lang="ts">
 	import X from '@lucide/svelte/icons/x';
-	import { open } from '@tauri-apps/plugin-dialog';
+	import { pickFiles as pick, type Picked } from '$lib/platform';
 	import { api } from '$lib/api';
 	import { plainText, time } from '$lib/format';
 	import { attempt, refresh } from '$lib/ui.svelte';
@@ -24,8 +24,8 @@
 		onsent: () => void;
 		onprompt: () => void;
 		onfeedback: () => void;
-		/** Called with the paths of the files the person picked. */
-		onupload: (paths: string[]) => void;
+		/** Called with the files the person picked: paths in the desktop app, browser files on the phone. */
+		onupload: (files: Picked[]) => void;
 	} = $props();
 
 	let text = $state('');
@@ -54,10 +54,8 @@
 	}
 
 	async function pickFiles() {
-		const picked = await attempt(() => open({ multiple: true, title: 'Upload files to this thread' }));
-		if (!picked) return;
-		const paths = Array.isArray(picked) ? picked : [picked];
-		if (paths.length) onupload(paths);
+		const picked = await attempt(() => pick('Upload files to this thread'));
+		if (picked?.length) onupload(picked);
 	}
 
 </script>

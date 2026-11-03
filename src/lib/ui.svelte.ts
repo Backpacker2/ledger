@@ -1,7 +1,7 @@
 // App-wide UI state: toasts, modal dialogs, the theme and the phone-width drawer. Kept as module-level
 // runes so any component can raise a toast or ask a question without prop drilling.
 
-import { listen } from '@tauri-apps/api/event';
+import { desktop, listen } from '$lib/platform';
 import { invalidateAll } from '$app/navigation';
 import { api } from './api';
 import type { ScreenshotTaken, SyncStatus } from './types';
@@ -155,11 +155,12 @@ export function startBackendEvents(): () => void {
 		.then(keep)
 		.catch(() => {});
 	// Ledger may have been launched with a picture (Flameshot's "Open with") before anything was listening.
-	api.pendingScreenshot()
-		.then((taken) => {
-			if (taken && !screenshot.pending) screenshot.pending = taken;
-		})
-		.catch(() => {});
+	if (desktop)
+		api.pendingScreenshot()
+			.then((taken) => {
+				if (taken && !screenshot.pending) screenshot.pending = taken;
+			})
+			.catch(() => {});
 
 	let lastCheck = 0;
 	const onFocus = async () => {

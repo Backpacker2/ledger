@@ -5,7 +5,7 @@
 	import { page } from '$app/state';
 	import Search from '@lucide/svelte/icons/search';
 	import X from '@lucide/svelte/icons/x';
-	import { groups, searchPanels } from '$lib/components/settings/panels';
+	import { shownGroups as groups, searchPanels } from '$lib/components/settings/panels';
 	import type { LayoutData } from './$types';
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();

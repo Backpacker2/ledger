@@ -7,8 +7,8 @@
 //
 // This module talks to the backend with `invoke` directly, not through api.ts: api.ts logs its failures here.
 
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { invoke } from '$lib/platform';
+import { listen } from '$lib/platform';
 import { captureText } from './report';
 import type { AboutInfo, CaptureStatus, LogEntry } from './types';
 
@@ -31,7 +31,8 @@ export const capture = $state<{ active: boolean; startedAt: string | null; event
 	last: null
 });
 
-const inTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+// A backend is there in the desktop app and in a browser served by ledger-server; not while rendering on the server.
+const inTauri = () => typeof window !== 'undefined';
 
 /** Writes an error to the log. Never throws: logging must not be what breaks. */
 export function logError(source: string, message: string) {

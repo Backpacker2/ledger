@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { listen } from '@tauri-apps/api/event';
-	import { openUrl } from '@tauri-apps/plugin-opener';
+	import { listen } from '$lib/platform';
+	import { openUrl } from '$lib/platform';
 	import Switch from '$lib/components/Switch.svelte';
 	import { trelloApi as api } from '$lib/api';
 	import { ago, dateTime } from '$lib/format';
