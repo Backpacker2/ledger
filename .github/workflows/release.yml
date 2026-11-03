@@ -19,6 +19,8 @@ name: Release
 on:
   push:
     branches: [main]
+  # Started by hand (Actions → Release → Run workflow), e.g. when a push to main found Actions still switched off.
+  workflow_dispatch:
 
 # One release at a time, in push order; a running release is never cancelled halfway.
 concurrency:
