@@ -191,6 +191,9 @@ them for the updater with the key in the repository secrets `TAURI_SIGNING_PRIVA
 publishes the release once every platform has been built. A release whose build failed stays a draft, which the app
 never sees. Don't bump versions by hand.
 
+`main` only takes pull requests (the `protected-main` ruleset), so CI pushes that release commit and tag with a deploy
+key the ruleset lets through: the write key whose private half is the Actions secret `RELEASE_DEPLOY_KEY`.
+
 ```bash
 pnpm release:preview   # what the next release would be, and its notes; changes nothing
 ```
