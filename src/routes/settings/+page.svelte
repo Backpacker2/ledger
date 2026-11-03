@@ -4,6 +4,7 @@
 	import AboutSettings from '$lib/components/AboutSettings.svelte';
 	import ClaudeCodeSettings from '$lib/components/ClaudeCodeSettings.svelte';
 	import HotkeyInput from '$lib/components/HotkeyInput.svelte';
+	import DashboardSettings from '$lib/components/DashboardSettings.svelte';
 	import OrderSettings from '$lib/components/OrderSettings.svelte';
 	import TrelloSettings from '$lib/components/TrelloSettings.svelte';
 	import { api } from '$lib/api';
@@ -618,6 +619,7 @@ templates/&lt;id&gt;.md                               templates for every projec
 
 		<!-- Display order of feedback and threads -->
 		<OrderSettings />
+		<DashboardSettings />
 
 		<!-- The version, and updating Ledger -->
 		<AboutSettings />

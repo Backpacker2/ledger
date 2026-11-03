@@ -6,6 +6,7 @@
 	import { api } from '$lib/api';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';
 	import type { Template } from '$lib/types';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 	import Modal from './Modal.svelte';
 
 	/** `template` is null when creating one. The modal is mounted fresh each time, so it only reads the initial values. */
@@ -77,7 +78,7 @@
 		<div class="q-list">
 			{#each questions as _, i (i)}
 				<div class="q-row">
-					<textarea bind:value={questions[i]} rows="2" placeholder="A question to answer in the thread first"></textarea>
+					<MarkdownEditor bind:value={questions[i]} rows={2} label="Guiding question {i + 1}" placeholder="A question to answer in the thread first" />
 					<div class="btns">
 						<button class="icon-btn" style="color:var(--muted)" aria-label="Move up" disabled={i === 0} onclick={() => move(i, -1)}><ArrowUp size={16} /></button>
 						<button class="icon-btn" style="color:var(--muted)" aria-label="Move down" disabled={i === questions.length - 1} onclick={() => move(i, 1)}><ArrowDown size={16} /></button>
@@ -88,11 +89,18 @@
 		</div>
 		<div><button class="btn small ghost" onclick={() => questions.push('')}><Plus size={14} />Add question</button></div>
 	</div>
-	<label class="field">
+	<div class="field">
 		Deliverable skeleton
-		<textarea class="doc-editor" style="min-height:160px" bind:value={body} placeholder="# Title&#10;&#10;## Section&#10;…" spellcheck="false"></textarea>
+		<MarkdownEditor
+			bind:value={body}
+			variant="doc"
+			minHeight="160px"
+			label="Deliverable skeleton"
+			placeholder={'# Title\n\n## Section\n…'}
+			spellcheck={false}
+		/>
 		<span class="hint">New deliverables created for a prompt from this template start with this text.</span>
-	</label>
+	</div>
 
 	{#snippet footer()}
 		{#if template}

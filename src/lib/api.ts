@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
+	ActivityEvent,
 	Board,
 	Bump,
 	Column,
@@ -45,6 +46,8 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 export const api = {
 	renderMarkdown: (body: string) => call<string>('render_markdown', { body }),
 	search: (query: string) => call<SearchHit[]>('search', { query }),
+	/** Everything made in the vault and when, oldest first: the contribution graph's events. */
+	listActivity: () => call<ActivityEvent[]>('list_activity'),
 
 	// projects
 	listProjects: () => call<ProjectSummary[]>('list_projects'),

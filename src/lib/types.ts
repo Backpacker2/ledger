@@ -134,6 +134,17 @@ export interface ThreadView {
 	stories: Story[];
 }
 
+// ---- activity ---------------------------------------------------------------------------------------
+
+export type ActivityKind = 'thread' | 'post' | 'prompt' | 'feedback' | 'upload' | 'version' | 'run' | 'story' | 'task';
+
+/** One thing made in a project, at a moment: what the contribution graph counts. */
+export interface ActivityEvent {
+	projectSlug: string;
+	kind: ActivityKind;
+	at: string;
+}
+
 // ---- deliverables -----------------------------------------------------------------------------------
 
 export type DeliverableKind = 'markdown' | 'image' | 'other';

@@ -5,6 +5,7 @@
 	import { plainText, time } from '$lib/format';
 	import { attempt, refresh } from '$lib/ui.svelte';
 	import type { Post } from '$lib/types';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 
 	let {
 		project,
@@ -29,7 +30,7 @@
 
 	let text = $state('');
 	let sending = $state(false);
-	let input: HTMLTextAreaElement;
+	let input: MarkdownEditor;
 
 	// Replying focuses the box; so does arriving in a thread.
 	$effect(() => {
@@ -39,12 +40,6 @@
 		input?.focus();
 	});
 
-	function grow() {
-		input.style.height = 'auto';
-		input.style.height = `${input.scrollHeight}px`;
-		input.style.overflowY = input.scrollHeight > 220 ? 'auto' : 'hidden';
-	}
-
 	async function send() {
 		const body = text.trim();
 		if (!body || sending) return;
@@ -53,7 +48,6 @@
 		sending = false;
 		if (!post) return;
 		text = '';
-		queueMicrotask(grow);
 		await refresh();
 		onsent();
 		input.focus();
@@ -66,13 +60,6 @@
 		if (paths.length) onupload(paths);
 	}
 
-	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-			e.preventDefault();
-			send();
-		}
-		if (e.key === 'Escape' && replyTo) oncancelreply();
-	}
 </script>
 
 <div class="composer">
@@ -88,14 +75,17 @@
 		<button class="btn small" onclick={pickFiles} title="Attach files to this thread">Upload files…</button>
 	</div>
 	<div class="input-row">
-		<textarea
+		<MarkdownEditor
 			bind:this={input}
 			bind:value={text}
-			oninput={grow}
-			{onkeydown}
-			rows="1"
+			variant="composer"
+			rows={1}
+			label="Note"
 			placeholder="Write a note… markdown works (Enter saves, Shift+Enter adds a line)"
-		></textarea>
+			submitOnEnter
+			onsubmit={send}
+			oncancel={replyTo ? oncancelreply : undefined}
+		/>
 		<button class="btn primary" onclick={send} disabled={sending || !text.trim()}>Save</button>
 	</div>
 </div>

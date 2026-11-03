@@ -3,6 +3,7 @@
 	import { api } from '$lib/api';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';
 	import type { Criterion, Story, ThreadSummary } from '$lib/types';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 	import Modal from './Modal.svelte';
 
 	/** `story` is null when creating one. The modal is mounted fresh each time, so it only reads the initial values. */
@@ -111,10 +112,10 @@
 		<label class="field grow">Such that…<input bind:value={reason} placeholder="reason" /></label>
 	</div>
 
-	<label class="field">
+	<div class="field">
 		Notes
-		<textarea bind:value={notes} rows="3" placeholder="Context, open questions, links. Markdown works."></textarea>
-	</label>
+		<MarkdownEditor bind:value={notes} label="Notes" placeholder="Context, open questions, links. Markdown works." />
+	</div>
 
 	<div class="field">
 		<span>Acceptance criteria{criteria.length ? ` · ${doneCount}/${criteria.length} met` : ''}</span>

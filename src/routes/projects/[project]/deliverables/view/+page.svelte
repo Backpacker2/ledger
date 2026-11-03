@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
+	import BookOpen from '@lucide/svelte/icons/book-open';
+	import CodeXml from '@lucide/svelte/icons/code-xml';
+	import PencilLine from '@lucide/svelte/icons/pencil-line';
 	import { goto } from '$app/navigation';
 	import FeedbackCard from '$lib/components/FeedbackCard.svelte';
 	import FileImage from '$lib/components/FileImage.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
+	import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
 	import MmmBadge from '$lib/components/MmmBadge.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ProvenancePanel from '$lib/components/ProvenancePanel.svelte';
@@ -13,6 +17,7 @@
 	import { MMM } from '$lib/mmm';
 	import { orderFeedback, orderVersions } from '$lib/order';
 	import { listOrder } from '$lib/order.svelte';
+	import { dirOf } from '$lib/vaultImages';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';
 	import { beforeRestart } from '$lib/updates.svelte';
 	import type { Bump, MmmLevel } from '$lib/types';
@@ -27,6 +32,8 @@
 	const snapshot = $derived(doc.version !== null);
 	const isMarkdown = $derived(doc.kind === 'markdown');
 	const file = $derived(deliverableFile(doc.path));
+	// Pictures in it are looked for beside the file.
+	const images = $derived({ project, dir: dirOf(file) });
 
 	// ---- the editable copy (markdown) ----------------------------------------------------------
 	// The page keeps its own text while you type and saves it in the background. It is only reset when a
@@ -93,11 +100,19 @@
 
 	// ---- view mode -----------------------------------------------------------------------------
 
-	type Mode = 'write' | 'preview' | 'split';
-	let mode = $state<Mode>('split');
+	// As in Obsidian: the raw markdown, the live preview (marks hidden away from the cursor), or the rendered page.
+	type Mode = 'source' | 'live' | 'reading';
+	const modes: { id: Mode; label: string; icon: typeof BookOpen }[] = [
+		{ id: 'source', label: 'Source', icon: CodeXml },
+		{ id: 'live', label: 'Live preview', icon: PencilLine },
+		{ id: 'reading', label: 'Reading', icon: BookOpen }
+	];
+	let mode = $state<Mode>('live');
 	try {
+		// The modes before these: Write and Split were editors, Preview was reading.
 		const saved = localStorage.getItem('ledger-doc-mode');
-		if (saved === 'write' || saved === 'preview' || saved === 'split') mode = saved;
+		if (saved === 'source' || saved === 'live' || saved === 'reading') mode = saved;
+		else if (saved === 'preview') mode = 'reading';
 	} catch {
 		// Storage unavailable: the default is fine.
 	}
@@ -310,32 +325,32 @@
 		{#if !doc.exists && !snapshot}
 			<div class="notice">The file is not in the project’s deliverables folder (any more).</div>
 		{:else if isMarkdown && snapshot}
-			<div class="doc-view"><Markdown html={doc.html ?? ''} /></div>
+			<div class="doc-view"><Markdown html={doc.html ?? ''} {images} /></div>
 		{:else if isMarkdown}
 			<div class="form-row" style="justify-content:space-between">
-				<div class="seg" role="group" aria-label="Editor view">
-					<button class:on={mode === 'write'} onclick={() => setMode('write')}>Write</button>
-					<button class:on={mode === 'split'} onclick={() => setMode('split')}>Split</button>
-					<button class:on={mode === 'preview'} onclick={() => setMode('preview')}>Preview</button>
+				<div class="seg" role="group" aria-label="View">
+					{#each modes as m (m.id)}
+						<button class:on={mode === m.id} aria-pressed={mode === m.id} onclick={() => setMode(m.id)}><m.icon size={14} />{m.label}</button>
+					{/each}
 				</div>
 				<span class="hint">Last changed {ago(doc.modified)}. Changes save automatically.</span>
 			</div>
-			<div class="editor-split" class:both={mode === 'split'}>
-				{#if mode !== 'preview'}
-					<textarea
-						class="doc-editor"
-						bind:value={body}
-						oninput={edited}
-						spellcheck="true"
-						placeholder="Write it in markdown…"
-					></textarea>
-				{/if}
-				{#if mode !== 'write'}
-					<div class="doc-view">
-						{#if body.trim()}<Markdown {html} />{:else}<span class="hint">Nothing to preview yet.</span>{/if}
-					</div>
-				{/if}
-			</div>
+			{#if mode === 'reading'}
+				<div class="doc-view">
+					{#if body.trim()}<Markdown {html} {images} />{:else}<span class="hint">Nothing here yet.</span>{/if}
+				</div>
+			{:else}
+				<MarkdownEditor
+					bind:value={body}
+					variant="doc"
+					minHeight="58vh"
+					label={doc.name}
+					placeholder="Write it in markdown…"
+					source={mode === 'source'}
+					{images}
+					oninput={edited}
+				/>
+			{/if}
 		{:else if doc.kind === 'image'}
 			<div class="doc-view" style="display:grid;place-items:center">
 				<FileImage {project} path={file} alt={doc.name} cls="shot-preview" />
@@ -371,15 +386,12 @@
 								{#each threads as t (t.slug)}<option value={t.slug}>{t.title}</option>{/each}
 							</select>
 						</div>
-						<textarea
-							class="edit-area"
+						<MarkdownEditor
 							bind:value={feedbackText}
-							rows="3"
+							label="Feedback"
 							placeholder="What works, what doesn’t, what to change…"
-							onkeydown={(e) => {
-								if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && feedbackText.trim()) addFeedback();
-							}}
-						></textarea>
+							onsubmit={() => feedbackText.trim() && addFeedback()}
+						/>
 						<div class="row-end">
 							<button class="btn small primary" onclick={addFeedback} disabled={feedbackBusy || !feedbackText.trim() || !feedbackThread}>
 								Add feedback
@@ -472,11 +484,11 @@
 				</span>
 			{/if}
 		</label>
-		<label class="field">
+		<div class="field">
 			<span>Changelog (optional)</span>
-			<textarea class="edit-area" bind:value={changeNote} rows="2" placeholder="What changed, in your words"></textarea>
+			<MarkdownEditor bind:value={changeNote} rows={2} label="Changelog" placeholder="What changed, in your words" />
 			<span class="hint">Quoted in the note in the thread, and shown with the version in the Produced by window.</span>
-		</label>
+		</div>
 		{#snippet footer()}
 			<span class="spacer-h"></span>
 			<button class="btn ghost" onclick={() => (publishing = false)}>Cancel</button>

@@ -6,6 +6,7 @@
 	import { attempt, confirmDialog, refresh } from '$lib/ui.svelte';
 	import type { Post } from '$lib/types';
 	import Markdown from './Markdown.svelte';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 
 	let {
 		project,
@@ -73,11 +74,6 @@
 		if (!ok) return;
 		if ((await attempt(() => api.deletePost(project, thread, post.id))) !== undefined) await refresh();
 	}
-
-	function onEditKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save();
-		if (e.key === 'Escape') editing = false;
-	}
 </script>
 
 <div
@@ -109,8 +105,7 @@
 	{/if}
 
 	{#if editing}
-		<!-- svelte-ignore a11y_autofocus -->
-		<textarea class="edit-area" bind:value={draft} onkeydown={onEditKeydown} autofocus></textarea>
+		<MarkdownEditor bind:value={draft} label="Post" autofocus onsubmit={save} oncancel={() => (editing = false)} />
 		<div class="row-end">
 			<span class="hint" style="align-self:center">Ctrl+Enter saves</span>
 			<button class="btn small ghost" onclick={() => (editing = false)}>Cancel</button>

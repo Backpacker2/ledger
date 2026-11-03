@@ -6,6 +6,7 @@
 	import { newProjectFlow, threadUrl } from '$lib/actions';
 	import { attempt, refresh, screenshot } from '$lib/ui.svelte';
 	import type { ProjectSummary } from '$lib/types';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 	import Modal from './Modal.svelte';
 
 	/**
@@ -74,14 +75,6 @@
 
 	const threadTitle = $derived(chosen?.threads.find((t) => t.slug === thread)?.title ?? thread);
 
-	// Enter attaches; Shift+Enter is a new line in the description.
-	function onDescriptionKey(e: KeyboardEvent) {
-		if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-			e.preventDefault();
-			void attach();
-		}
-	}
-
 	async function discard() {
 		screenshot.pending = null;
 		await attempt(() => api.discardScreenshot());
@@ -131,10 +124,19 @@
 				<span>Attach to <strong>{chosen?.name}</strong> › <strong>{threadTitle}</strong></span>
 				<button class="btn ghost" onclick={() => (compact = false)}>Change…</button>
 			</div>
-			<label class="field">
+			<!-- Enter attaches; Shift+Enter is a new line in the description. -->
+			<div class="field">
 				Description (optional)
-				<textarea bind:value={description} rows="2" placeholder="What does this show? Markdown works." onkeydown={onDescriptionKey}></textarea>
-			</label>
+				<MarkdownEditor
+					bind:value={description}
+					rows={2}
+					label="Description"
+					placeholder="What does this show? Markdown works."
+					autofocus
+					submitOnEnter
+					onsubmit={attach}
+				/>
+			</div>
 		{:else}
 			<div class="form-row">
 				<label class="field grow">
@@ -157,10 +159,10 @@
 					<input bind:value={title} placeholder="e.g. Checkout flow" onkeydown={(e) => e.key === 'Enter' && attach()} />
 				</label>
 			{/if}
-			<label class="field">
+			<div class="field">
 				Description (optional)
-				<textarea bind:value={description} rows="3" placeholder="What does this show? Markdown works." onkeydown={onDescriptionKey}></textarea>
-			</label>
+				<MarkdownEditor bind:value={description} label="Description" placeholder="What does this show? Markdown works." submitOnEnter onsubmit={attach} />
+			</div>
 		{/if}
 
 		{#snippet footer()}
