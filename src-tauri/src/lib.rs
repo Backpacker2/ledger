@@ -1,3 +1,7 @@
+// Without the desktop app (a headless `ledger-server` build) the Tauri-only parts are left out, and some helpers
+// they share go unused there.
+#![cfg_attr(not(feature = "desktop"), allow(dead_code, unused_imports))]
+
 mod activity;
 mod applog;
 mod board;
@@ -19,6 +23,7 @@ mod posts;
 mod projects;
 mod prompts;
 mod provenance;
+#[cfg(feature = "desktop")]
 mod screenshot;
 mod search;
 mod settings;
@@ -28,11 +33,17 @@ mod sync;
 mod syncer;
 mod templates;
 mod threads;
+#[cfg(feature = "desktop")]
 mod updates;
 mod uploads;
 mod vault;
 
+// The headless server behind the mobile version (`ledger-server`, feature `server`).
+#[cfg(feature = "server")]
+pub mod server;
+
 // ---- Trello sync (feat/trello-sync) ----
+#[cfg(feature = "desktop")]
 mod trello;
 mod trello_api;
 mod trello_card;
@@ -45,30 +56,34 @@ mod trello_sync;
 mod tests;
 #[cfg(test)]
 mod tests_applog;
-#[cfg(test)]
+#[cfg(all(test, feature = "desktop"))]
 mod tests_claude_code;
-#[cfg(test)]
+#[cfg(all(test, feature = "desktop"))]
 mod tests_trello;
 #[cfg(test)]
 mod tests_crypto;
 #[cfg(test)]
 mod tests_provenance;
-#[cfg(test)]
+#[cfg(all(test, feature = "desktop"))]
 mod tests_screenshot;
 #[cfg(test)]
 mod tests_sync;
-#[cfg(test)]
+#[cfg(all(test, feature = "desktop"))]
 mod tests_updates;
 #[cfg(test)]
 mod tests_vault;
 
 
+#[cfg(feature = "desktop")]
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "desktop")]
 use tauri::{Emitter, Manager};
 
+#[cfg(feature = "desktop")]
 use crate::syncer::Event;
 
+#[cfg(feature = "desktop")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();

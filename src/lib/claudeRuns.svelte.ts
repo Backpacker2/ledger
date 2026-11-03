@@ -2,7 +2,7 @@
 // screen is open; this keeps what the window has heard about them, for as long as the window lives, so a run is
 // still on its prompt when you come back to it. It starts listening the first time a screen asks for it.
 
-import { listen } from '@tauri-apps/api/event';
+import { desktop, listen } from '$lib/platform';
 import { claudeCodeApi } from './api';
 import { toast } from './ui.svelte';
 import type { ClaudeRun, ClaudeRunEvent, Prompt } from './types';
@@ -76,7 +76,8 @@ function apply({ run, chunk }: ClaudeRunEvent) {
 
 /** Starts listening, once. Safe to call from every screen that shows runs. */
 export function ensureClaudeRuns() {
-	if (started) return;
+	// Claude Code runs on the desktop for now; ledger-server doesn't start them.
+	if (started || !desktop) return;
 	started = true;
 	listen<ClaudeRunEvent>('claude-run', (event) => apply(event.payload)).catch(() => {
 		started = false;
@@ -97,6 +98,7 @@ export function trackRun(run: ClaudeRun) {
  * stops the creation: if the run can't start, the prompt is there and the toast says why.
  */
 export async function autoRunNewPrompt(project: string, thread: string, prompt: Prompt) {
+	if (!desktop) return;
 	let settings;
 	try {
 		settings = await claudeCodeApi.settings();

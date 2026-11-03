@@ -30,7 +30,7 @@ import {
 	type ViewUpdate
 } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from '$lib/platform';
 import { isVaultSrc, isWebSrc, type ImageLoad } from '$lib/vaultImages';
 
 type SyntaxNode = ReturnType<typeof syntaxTree>['topNode'];

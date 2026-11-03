@@ -194,8 +194,9 @@ fn only_a_real_minisign_public_key_lets_a_build_look_for_updates() {
 fn the_app_asks_the_latest_github_release_and_local_builds_need_no_signing_key() {
     let conf = tauri_conf();
     let updater = &conf["plugins"]["updater"];
-    assert_eq!(updater["endpoints"], serde_json::json!(["https://github.com/openledger-nl/ledger/releases/latest/download/latest.json"]));
-    assert!(updater["pubkey"].is_string(), "the public key (or its placeholder) belongs in tauri.conf.json");
+    assert_eq!(updater["endpoints"], serde_json::json!(["https://github.com/Backpacker2/ledger/releases/latest/download/latest.json"]));
+    // This fork's own key: its releases are signed with the matching secret in Backpacker2/ledger.
+    assert_eq!(key_problem(updater["pubkey"].as_str()), None, "a real public key belongs in tauri.conf.json");
     // An update must be signed for the version the release announces, so an old release can't be passed off as new.
     assert_eq!(updater["requireSignedVersion"], serde_json::json!(true));
     // Nothing insecure in the shipped config.

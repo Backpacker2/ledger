@@ -2,7 +2,7 @@
 	// The settings screen's panel for running prompts with Claude Code. Its settings live in the vault's
 	// .ledger/claude-code.json (never synced), apart from the rest of the settings.
 	import { onMount } from 'svelte';
-	import { open } from '@tauri-apps/plugin-dialog';
+	import { openDialog as open } from '$lib/platform';
 	import { claudeCodeApi } from '$lib/api';
 	import { attempt, toast } from '$lib/ui.svelte';
 	import type { ClaudeCodeCheck, ClaudeCodeSettings, ClaudePermissionMode } from '$lib/types';

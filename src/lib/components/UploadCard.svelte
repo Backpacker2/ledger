@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { desktop } from '$lib/platform';
 	import { api } from '$lib/api';
 	import { formatSize } from '$lib/actions';
 	import { time } from '$lib/format';
@@ -56,7 +57,7 @@
 		<span class="fsize">{formatSize(upload.size)}</span>
 		{#if upload.exists}
 			<button class="link accent" onclick={() => open(false)}>Open</button>
-			<button class="link" onclick={() => open(true)}>Show in folder</button>
+			{#if desktop}<button class="link" onclick={() => open(true)}>Show in folder</button>{/if}
 		{:else}
 			<span class="missing">File is missing</span>
 		{/if}

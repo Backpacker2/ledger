@@ -123,7 +123,7 @@ Install a release to use Ledger and get updates from inside the app; build it fr
 
 ### Installing a release
 
-Every [release](https://github.com/openledger-nl/ledger/releases) carries installers:
+Every [release](https://github.com/Backpacker2/ledger/releases) carries installers:
 
 | System | Download |
 |---|---|
@@ -171,6 +171,58 @@ pnpm run check         # Svelte + TypeScript
 Environment variables, mostly for development: `LEDGER_VAULT` fixes the vault location (and locks it in Settings); `LEDGER_CONFIG_DIR` moves the per-machine settings (the vault location, whether to check for updates); `LEDGER_GITHUB_API` points the sync at another API base (GitHub Enterprise, or a mock).
 
 To send a change, read [CONTRIBUTING.md](CONTRIBUTING.md): the checks, and how to write the commits.
+
+### The mobile server (`ledger-server`)
+
+For using Ledger from a phone: a second binary, `ledger-server`, opens a vault like the desktop app does (in memory,
+written through to the files, synced to GitHub) and answers the same commands over HTTP, without a window. It is meant
+to run on an always-on machine at home and be reached over [Tailscale](https://tailscale.com).
+
+```bash
+cargo build --release --no-default-features --features server --bin ledger-server --manifest-path src-tauri/Cargo.toml
+LEDGER_VAULT=~/ledger-vault src-tauri/target/release/ledger-server     # listens on 127.0.0.1:8787
+tailscale serve --bg 8787                                              # https://<machine>.<tailnet>.ts.net
+```
+
+With `pnpm run build` and `LEDGER_STATIC=build`, the server also serves the screens: open its address in a browser
+and Ledger runs there as it does in the desktop app. Everything that differs between the two (commands over IPC or
+HTTP, events, the file picker, opening files) is in `src/lib/platform.ts`; import from there, not from
+`@tauri-apps/*`. In the browser the desktop-only settings panels (`desktopOnly` in `panels.ts`), Claude Code runs and
+"Show in folder" are hidden, and uploads go through the browser's own file picker (on a phone: photos and camera too).
+
+- `POST /api/<command>`: the command's arguments as a JSON object, named as the frontend sends them to `invoke`
+  (camelCase). `200` with the result, `400` with the error message, `404` for a desktop-only command.
+- `GET /api/file?project=…&path=…`: a file in a project's folder. `POST /api/upload`: multipart `project`, `thread`,
+  `description` and `file` parts, attached to the thread. `GET /api/events`: server-sent `sync-status`,
+  `vault-changed` and `log-entry` events.
+- Desktop-only and not served: screenshots, opening files with the system's programs, updates, the vault picker,
+  and (for now) Claude Code runs and the Trello sync. `DESKTOP_ONLY` in `src-tauri/src/server.rs` lists them; a
+  test fails when a new command is neither served nor listed there.
+- Environment: `LEDGER_VAULT` (required), `LEDGER_CONFIG_DIR` (log and per-machine settings; default
+  `~/Library/Application Support/ledger-server`), `LEDGER_SERVER_ADDR` (default `127.0.0.1:8787`), `LEDGER_STATIC`
+  (a built frontend to serve), `LEDGER_ALLOWED_LOGINS` (comma-separated Tailscale logins; others get `403`, checked
+  against the `Tailscale-User-Login` header that `tailscale serve` adds).
+- It has no login of its own: keep it on `127.0.0.1` behind `tailscale serve`, never on a public address.
+
+`--no-default-features` leaves Tauri out (the `desktop` feature), so the server links no GUI libraries. For Linux,
+`scripts/build-linux-server.sh [x86_64|aarch64]` cross-compiles it from a Mac in Docker.
+
+To put it on a machine at home (a Mac mini, or a Linux box) and keep it running there, from this machine:
+
+```bash
+scripts/deploy-mini.sh <ssh-host>     # the Mac's Tailscale name, or a Host from ~/.ssh/config
+```
+
+It asks the machine what it is (macOS or Linux, Intel or ARM), builds the screens and the server for it,
+copies them to `~/ledger-server` there, writes `~/ledger-server/ledger-server.env` the first time (the vault
+`~/ledger-vault`, the port, `LEDGER_ALLOWED_LOGINS`; kept on later deploys), installs a service that restarts it if it stops (a LaunchAgent on macOS, a systemd user service with lingering on
+Linux), waits until it answers, and runs `tailscale serve --bg 8787`. Run it again to
+update. The machine only needs Tailscale and SSH (`LEDGER_SSH_KEY` picks the key). On a Mac, turn on automatic login so
+it comes back after a power cut. On Linux, `tailscale serve` needs `sudo tailscale set --operator=$USER` once. `--package` only builds the bundle into `dist/`.
+
+Then, on the phone: open the `https://<machine>.<tailnet>.ts.net` address it prints, fill the empty vault with
+**Settings → Sync & external → Sync to GitHub** (the same repository the desktop app syncs to), and add Ledger to the
+home screen (Safari: Share → Add to Home Screen).
 
 ## Versions and releases
 

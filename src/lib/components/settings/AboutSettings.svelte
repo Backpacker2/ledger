@@ -1,7 +1,7 @@
 <script lang="ts">
 	// About Ledger: what it is, where its code lives, and this build on this machine.
 	import { onMount } from 'svelte';
-	import { openUrl } from '@tauri-apps/plugin-opener';
+	import { openUrl } from '$lib/platform';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Wordmark from '$lib/components/Wordmark.svelte';
 	import { logApi } from '$lib/api';

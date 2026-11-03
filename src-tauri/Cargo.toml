@@ -4,6 +4,8 @@ version = "0.7.0"
 description = "Local-first ledger of threads, documents, user stories and a planboard"
 authors = ["Milan Molenbrugge"]
 edition = "2024"
+# `ledger-server` (below) is a second binary; plain `cargo run` and `tauri dev` keep starting the desktop app.
+default-run = "ledger"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,12 +16,35 @@ edition = "2024"
 name = "ledger_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "ledger"
+path = "src/main.rs"
+required-features = ["desktop"]
+
+# The headless server behind the mobile version: the same commands over HTTP, for a phone on the tailnet.
+# Built only with `--features server`, so the desktop build doesn't change.
+[[bin]]
+name = "ledger-server"
+path = "src/bin/ledger-server.rs"
+required-features = ["server"]
+
+[features]
+default = ["desktop"]
+# The desktop app: Tauri, its plugins, and the screen capture. Left out of a headless `ledger-server` build
+# (`--no-default-features --features server`), which then needs no GUI libraries, e.g. on a Linux server.
+desktop = [
+    "dep:tauri-build", "dep:tauri", "dep:tauri-plugin-opener", "dep:tauri-plugin-dialog",
+    "dep:tauri-plugin-global-shortcut", "dep:tauri-plugin-updater", "dep:tauri-plugin-single-instance",
+    "dep:xcap", "dep:ashpd", "dep:futures-util", "dep:url", "dep:core-graphics",
+]
+server = ["dep:axum", "dep:tokio", "dep:tokio-stream", "dep:tower-http"]
+
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", features = [], optional = true }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
+tauri = { version = "2", features = [], optional = true }
+tauri-plugin-opener = { version = "2", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
@@ -29,16 +54,21 @@ serde_yaml_ng = "0.10.0"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 sha1 = "0.11.0"
 ignore = "0.4.34"
-tauri-plugin-dialog = "2.8.4"
+tauri-plugin-dialog = { version = "2.8.4", optional = true }
 base64 = "0.23.1"
-tauri-plugin-global-shortcut = "2.4.1"
+tauri-plugin-global-shortcut = { version = "2.4.1", optional = true }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 aes-gcm = { version = "0.11.1", features = ["zeroize"] }
 flate2 = "1.1.10"
 sha2 = "0.11.1"
 zeroize = "1.9.1"
 # Installing new releases from inside the app (`updates.rs`). Registered in release builds only, see `lib.rs`.
-tauri-plugin-updater = "2"
+tauri-plugin-updater = { version = "2", optional = true }
+# The mobile server (`server.rs`, feature `server`).
+axum = { version = "0.8", optional = true, features = ["multipart"] }
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "signal", "sync", "fs"] }
+tokio-stream = { version = "0.1", optional = true, features = ["sync"] }
+tower-http = { version = "0.6", optional = true, features = ["fs"] }
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
@@ -54,15 +84,15 @@ tempfile = "3.27.0"
 # The built-in screen capture (see `screenshot::builtin`). Not on Linux: there xcap drags in PipeWire, and the
 # desktop's screenshot portal or the user's own tool (Flameshot) does the job instead.
 [target.'cfg(not(target_os = "linux"))'.dependencies]
-xcap = "0.9.8"
+xcap = { version = "0.9.8", optional = true }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-single-instance = "2"
+tauri-plugin-single-instance = { version = "2", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-ashpd = { version = "0.13.13", default-features = false, features = ["tokio", "screenshot", "global_shortcuts"] }
-futures-util = "0.3.34"
-url = "2.5.8"
+ashpd = { version = "0.13.13", optional = true, default-features = false, features = ["tokio", "screenshot", "global_shortcuts"] }
+futures-util = { version = "0.3.34", optional = true }
+url = { version = "2.5.8", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-core-graphics = "0.25.0"
+core-graphics = { version = "0.25.0", optional = true }

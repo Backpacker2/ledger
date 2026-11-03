@@ -39,8 +39,8 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://github.com/openledger-nl/ledger/releases/latest/download/latest.json"],
-      "pubkey": "REPLACE-WITH-THE-UPDATER-PUBLIC-KEY from pnpm tauri signer generate (until then, release builds never look for updates)",
+      "endpoints": ["https://github.com/Backpacker2/ledger/releases/latest/download/latest.json"],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk3MDk0N0IyNUI5MzIxRDYKUldUV0laTmJza2NKbHc1SlhOL0gwTld2WWliUjZiYWRxcEZTUE1KMkJDS2d4ZWFrU3ViQ0Y3T2UK",
       "requireSignedVersion": true
     }
   },

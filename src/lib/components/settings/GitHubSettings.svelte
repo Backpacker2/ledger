@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Syncing the vault with a private GitHub repository: where to, the token, and how the last sync went.
-	import { openUrl } from '@tauri-apps/plugin-opener';
+	import { openUrl } from '$lib/platform';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Switch from '$lib/components/Switch.svelte';
 	import { api } from '$lib/api';

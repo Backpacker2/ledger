@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Debug capture: record every step for a while, then send the file to the developer.
 	import { onMount } from 'svelte';
-	import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
+	import { openUrl, revealItemInDir } from '$lib/platform';
 	import Bot from '@lucide/svelte/icons/bot';
 	import Bug from '@lucide/svelte/icons/bug';
 	import CircleDot from '@lucide/svelte/icons/circle-dot';

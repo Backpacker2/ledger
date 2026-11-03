@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { DesktopOnly, desktop, fileUrl, invoke, type Picked } from './platform';
 import { capture, captureDebug, logError } from './log.svelte';
 import type {
 	ActivityEvent,
@@ -35,9 +35,6 @@ import type {
 /** Commands reject with a plain message; surface it as an `Error` so callers can `catch (e)` uniformly. */
 /** Runs a backend command; a failure is written to the app's log (unless `log` is false) and thrown. */
 async function call<T>(command: string, args?: Record<string, unknown>, log = true): Promise<T> {
-	if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
-		throw new Error('Ledger needs its desktop shell — start it with `pnpm run tauri dev`.');
-	}
 	const started = performance.now();
 	try {
 		const result = await invoke<T>(command, args);
@@ -45,10 +42,37 @@ async function call<T>(command: string, args?: Record<string, unknown>, log = tr
 		if (log && capture.active) captureDebug(command, `ok in ${Math.round(performance.now() - started)} ms`);
 		return result;
 	} catch (e) {
+		// Asking for a desktop-only thing from the phone isn't an error worth logging.
+		if (e instanceof DesktopOnly) throw e;
 		const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
 		if (log) logError(command, `${message}${capture.active ? ` (after ${Math.round(performance.now() - started)} ms)` : ''}`);
 		throw new Error(message);
 	}
+}
+
+async function fetchProjectFile(project: string, path: string): Promise<ArrayBuffer> {
+	const response = await fetch(fileUrl(project, path));
+	if (!response.ok) {
+		const message = await response.json().catch(() => null);
+		throw new Error(typeof message === 'string' ? message : `Couldn't load ${path} (${response.status})`);
+	}
+	return response.arrayBuffer();
+}
+
+async function uploadOverHttp(project: string, thread: string, files: File[], description: string): Promise<Upload[]> {
+	const form = new FormData();
+	form.append('project', project);
+	form.append('thread', thread);
+	form.append('description', description);
+	for (const file of files) form.append('file', file, file.name);
+	const response = await fetch('/api/upload', { method: 'POST', body: form });
+	const body = await response.json().catch(() => null);
+	if (!response.ok) {
+		const message = typeof body === 'string' ? body : `The upload failed (${response.status})`;
+		logError('upload', message);
+		throw new Error(message);
+	}
+	return body as Upload[];
 }
 
 export const api = {
@@ -103,14 +127,24 @@ export const api = {
 	deleteFeedback: (project: string, thread: string, id: string) => call<void>('delete_feedback', { project, thread, id }),
 
 	// uploads and project files
-	uploadFiles: (project: string, thread: string, paths: string[], description: string) =>
-		call<Upload[]>('upload_files', { project, thread, paths, description }),
+	/** Paths on this machine in the desktop app; files the browser picked on the phone (`POST /api/upload`). */
+	uploadFiles: (project: string, thread: string, files: Picked[], description: string) =>
+		desktop
+			? call<Upload[]>('upload_files', { project, thread, paths: files.filter((f) => typeof f === 'string'), description })
+			: uploadOverHttp(project, thread, files.filter((f) => f instanceof File), description),
 	updateUpload: (project: string, thread: string, id: string, description: string) =>
 		call<Upload>('update_upload', { project, thread, id, description }),
 	deleteUpload: (project: string, thread: string, id: string) => call<void>('delete_upload', { project, thread, id }),
 	/** A file in the project's folder ("attachments/…", "deliverables/…"), as raw bytes. */
-	readProjectFile: (project: string, path: string) => call<ArrayBuffer>('read_project_file', { project, path }),
-	openProjectFile: (project: string, path: string, reveal = false) => call<void>('open_project_file', { project, path, reveal }),
+	readProjectFile: (project: string, path: string) =>
+		desktop ? call<ArrayBuffer>('read_project_file', { project, path }) : fetchProjectFile(project, path),
+	/** With the system's program (desktop), or in a new tab (phone; `reveal` isn't possible there). */
+	openProjectFile: (project: string, path: string, reveal = false) => {
+		if (desktop) return call<void>('open_project_file', { project, path, reveal });
+		if (reveal) return Promise.reject(new DesktopOnly('Showing a file in its folder'));
+		window.open(fileUrl(project, path), '_blank', 'noopener');
+		return Promise.resolve();
+	},
 
 	// deliverables
 	listDeliverables: (project: string) => call<DeliverableSummary[]>('list_deliverables', { project }),
