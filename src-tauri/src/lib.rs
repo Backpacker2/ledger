@@ -32,6 +32,10 @@ mod updates;
 mod uploads;
 mod vault;
 
+// The headless server behind the mobile version (`ledger-server`, feature `server`).
+#[cfg(feature = "server")]
+pub mod server;
+
 // ---- Trello sync (feat/trello-sync) ----
 mod trello;
 mod trello_api;

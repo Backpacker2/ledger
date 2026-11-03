@@ -172,6 +172,32 @@ Environment variables, mostly for development: `LEDGER_VAULT` fixes the vault lo
 
 To send a change, read [CONTRIBUTING.md](CONTRIBUTING.md): the checks, and how to write the commits.
 
+### The mobile server (`ledger-server`)
+
+For using Ledger from a phone: a second binary, `ledger-server`, opens a vault like the desktop app does (in memory,
+written through to the files, synced to GitHub) and answers the same commands over HTTP, without a window. It is meant
+to run on an always-on machine at home and be reached over [Tailscale](https://tailscale.com).
+
+```bash
+cargo build --release --features server --bin ledger-server --manifest-path src-tauri/Cargo.toml
+LEDGER_VAULT=~/ledger-vault src-tauri/target/release/ledger-server     # listens on 127.0.0.1:8787
+tailscale serve --bg 8787                                              # https://<machine>.<tailnet>.ts.net
+```
+
+- `POST /api/<command>`: the command's arguments as a JSON object, named as the frontend sends them to `invoke`
+  (camelCase). `200` with the result, `400` with the error message, `404` for a desktop-only command.
+- `GET /api/file?project=…&path=…`: a file in a project's folder. `POST /api/upload`: multipart `project`, `thread`,
+  `description` and `file` parts, attached to the thread. `GET /api/events`: server-sent `sync-status`,
+  `vault-changed` and `log-entry` events.
+- Desktop-only and not served: screenshots, opening files with the system's programs, updates, the vault picker,
+  and (for now) Claude Code runs and the Trello sync. `DESKTOP_ONLY` in `src-tauri/src/server.rs` lists them; a
+  test fails when a new command is neither served nor listed there.
+- Environment: `LEDGER_VAULT` (required), `LEDGER_CONFIG_DIR` (log and per-machine settings; default
+  `~/Library/Application Support/ledger-server`), `LEDGER_SERVER_ADDR` (default `127.0.0.1:8787`), `LEDGER_STATIC`
+  (a built frontend to serve), `LEDGER_ALLOWED_LOGINS` (comma-separated Tailscale logins; others get `403`, checked
+  against the `Tailscale-User-Login` header that `tailscale serve` adds).
+- It has no login of its own: keep it on `127.0.0.1` behind `tailscale serve`, never on a public address.
+
 ## Versions and releases
 
 Every push to `main` that brings [conventional commits](https://www.conventionalcommits.org) is released by CI

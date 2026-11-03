@@ -4,6 +4,8 @@ version = "0.7.0"
 description = "Local-first ledger of threads, documents, user stories and a planboard"
 authors = ["Milan Molenbrugge"]
 edition = "2024"
+# `ledger-server` (below) is a second binary; plain `cargo run` and `tauri dev` keep starting the desktop app.
+default-run = "ledger"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,6 +15,20 @@ edition = "2024"
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "ledger_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "ledger"
+path = "src/main.rs"
+
+# The headless server behind the mobile version: the same commands over HTTP, for a phone on the tailnet.
+# Built only with `--features server`, so the desktop build doesn't change.
+[[bin]]
+name = "ledger-server"
+path = "src/bin/ledger-server.rs"
+required-features = ["server"]
+
+[features]
+server = ["dep:axum", "dep:tokio", "dep:tokio-stream", "dep:tower-http"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -39,6 +55,11 @@ sha2 = "0.11.1"
 zeroize = "1.9.1"
 # Installing new releases from inside the app (`updates.rs`). Registered in release builds only, see `lib.rs`.
 tauri-plugin-updater = "2"
+# The mobile server (`server.rs`, feature `server`).
+axum = { version = "0.8", optional = true, features = ["multipart"] }
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "signal", "sync", "fs"] }
+tokio-stream = { version = "0.1", optional = true, features = ["sync"] }
+tower-http = { version = "0.6", optional = true, features = ["fs"] }
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
