@@ -172,6 +172,8 @@ src/                     SvelteKit frontend (static SPA)
   lib/components/        sidebar tree, post/prompt/feedback/upload cards, composer, modals, hotkey recorder …
   routes/screenshot-overlay  the built-in capture's region picker (its own window; not used on Linux)
 scripts/release.mjs      the next version from the conventional commits (run by CI)
+scripts/check-commits.mjs  checks every commit in a pull request against CONTRIBUTING.md (run by CI)
+scripts/conventional.mjs what counts as a conventional commit, shared by both
 src-tauri/src/
   schema.sql             the in-memory database's shape and rules
   projects.rs threads.rs posts.rs prompts.rs feedback.rs uploads.rs deliverables.rs templates.rs

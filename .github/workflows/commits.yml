@@ -1,0 +1,36 @@
+# Checks every commit a pull request brings. Pull requests are merged with a merge commit, so each commit lands on main
+# as it is and scripts/release.mjs reads it to make the release. The rules are in scripts/check-commits.mjs and the
+# scopes in CONTRIBUTING.md. Kept apart from CI so it reports in seconds, without waiting for the Rust build.
+name: Commits
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+# Only the newest push counts.
+concurrency:
+  group: commits-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  commits:
+    name: Commits # the ruleset on main requires this check by name
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }} # the branch itself, not the merge GitHub makes to test it
+          fetch-depth: 0 # its whole history and main's, to tell the branch's own commits apart
+          persist-credentials: false
+
+      # The runner's own Node runs the script; there is nothing to install. What it checks reaches it only through
+      # the environment, never written into the command.
+      - name: Check the commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: node scripts/check-commits.mjs
