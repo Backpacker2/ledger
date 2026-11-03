@@ -469,8 +469,9 @@
 			{/if}
 		</label>
 		<label class="field">
-			<span>What changed? (optional)</span>
-			<textarea class="edit-area" bind:value={changeNote} rows="2" placeholder="Shown with the version in the Produced by window"></textarea>
+			<span>Changelog (optional)</span>
+			<textarea class="edit-area" bind:value={changeNote} rows="2" placeholder="What changed, in your words"></textarea>
+			<span class="hint">Quoted in the note in the thread, and shown with the version in the Produced by window.</span>
 		</label>
 		{#snippet footer()}
 			<span class="spacer-h"></span>

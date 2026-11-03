@@ -179,6 +179,13 @@ pub fn announcement(conn: &Connection, project: &str, name: &str, version: &str,
     if origin.ai && matches!(origin.cause, Cause::Manual) {
         text.push_str(" It was made with generative AI.");
     }
+    // A changelog is what a person wrote about the change, so the thread quotes it as theirs. A run writes none.
+    let changelog = origin.note.trim();
+    if !changelog.is_empty() {
+        text.push_str(&format!("
+
+from changelog: {changelog}"));
+    }
     Ok(text)
 }
 

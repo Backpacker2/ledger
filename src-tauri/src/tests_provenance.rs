@@ -120,7 +120,12 @@ fn ticking_that_ai_made_the_change_records_it_with_its_label_prompt_and_note() {
     assert_eq!((known.mmm.as_deref(), known.note.as_str()), (Some("cyborg"), "Pasted from a chat, then rewritten."));
 
     let note = &notes(&c, &p, &t2)[0];
-    assert_eq!(note.body, "Version 0.1 of **plan.md** was published from the prompt **Write the plan**. It was made with generative AI.");
+    assert_eq!(
+        note.body,
+        "Version 0.1 of **plan.md** was published from the prompt **Write the plan**. It was made with generative AI.
+
+from changelog: Pasted from a chat, then rewritten."
+    );
     assert_eq!((note.prompt_id.as_deref(), note.prompt_title.as_deref()), (Some(prompt.as_str()), Some("Write the plan")));
     assert!(notes(&c, &p, &t1).is_empty(), "it went where the person said");
 
@@ -131,6 +136,37 @@ fn ticking_that_ai_made_the_change_records_it_with_its_label_prompt_and_note() {
     assert_eq!(prov.suggested_label.as_deref(), Some("cyborg"));
     let listed = deliverables::list(&c, &p).unwrap();
     assert_eq!(listed.iter().find(|d| d.path == "plan.md").unwrap().mmm.as_deref(), Some("cyborg"), "the list shows the label too");
+}
+
+#[test]
+fn the_note_in_the_thread_quotes_a_changelog_only_when_a_person_wrote_one() {
+    let (c, p, t1, _, prompt) = setup();
+    publish(&c, &p, "# Plan
+
+one
+", &choose(|x| x.note = Some("   ".into())));
+    publish(&c, &p, "# Plan
+
+two
+", &choose(|x| x.note = Some("Tightened phase two.
+Added a budget line.".into())));
+
+    // A run writes no changelog, so what it publishes reads as before.
+    let origin = provenance::Origin::run(&t1, &prompt, Some("run-a"));
+    deliverables::save(&c, &p, "plan.md", "# Plan
+
+by the run
+").unwrap();
+    let root = tempdir().unwrap();
+    deliverables::publish_run(&c, root.path(), &p, "plan.md", None, &origin).unwrap();
+
+    let bodies: Vec<String> = notes(&c, &p, &t1).into_iter().map(|n| n.body).collect();
+    assert_eq!(bodies[0], "Version 0.1 of **plan.md** was just published.", "a blank changelog is no changelog");
+    assert_eq!(bodies[1], "Version 0.2 of **plan.md** was just published.
+
+from changelog: Tightened phase two.
+Added a budget line.");
+    assert_eq!(bodies[2], "Version 0.3 of **plan.md** was published from the prompt **Write the plan**.");
 }
 
 #[test]
