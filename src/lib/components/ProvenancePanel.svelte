@@ -3,6 +3,8 @@
 	import { deliverableUrl, formatSize, threadUrl } from '$lib/actions';
 	import { ago, date, dateTime, dayKey, plural } from '$lib/format';
 	import { MMM, authorLabel, sizeChange } from '$lib/mmm';
+	import { orderProvenance } from '$lib/order';
+	import { listOrder } from '$lib/order.svelte';
 	import { attempt, refresh } from '$lib/ui.svelte';
 	import type { Deliverable, MmmLevel, Provenance, ProvenanceVersion, VersionUpdate } from '$lib/types';
 	import MessageCircle from '@lucide/svelte/icons/message-circle';
@@ -20,6 +22,8 @@
 
 	const summary = $derived(provenance.summary);
 	const latest = $derived(doc.versions.at(-1) ?? null);
+	// The order is a setting (Settings, Order); the draft is the newest thing there is, so it goes where newest does.
+	const groups = $derived(orderProvenance(provenance.groups, listOrder.order));
 
 	let busy = $state(false);
 
@@ -65,6 +69,7 @@
 	</div>
 </div>
 
+{#snippet draftRow()}
 {#if provenance.draft}
 	<div class="pv-draft">
 		<strong>Draft{provenance.draft.since ? ` after v${provenance.draft.since}` : ''}</strong>
@@ -79,7 +84,11 @@
 	</div>
 {/if}
 
-{#each provenance.groups as group (group.thread?.slug ?? '—')}
+{/snippet}
+
+{#if listOrder.order === 'desc'}{@render draftRow()}{/if}
+
+{#each groups as group (group.thread?.slug ?? '—')}
 	<section class="pv-group">
 		<div class="pv-thread">
 			{#if group.thread}
@@ -210,3 +219,5 @@
 		<div class="pv-hint">Nothing has produced this file yet. Versions you publish, and the prompts and runs behind them, are listed here by thread.</div>
 	{/if}
 {/each}
+
+{#if listOrder.order === 'asc'}{@render draftRow()}{/if}

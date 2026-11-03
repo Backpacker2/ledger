@@ -11,7 +11,7 @@
 	let { data }: { data: PageData } = $props();
 
 	const project = $derived(data.project);
-	const threads = $derived(orderThreads(data.projects.find((p) => p.slug === project.slug)?.threads ?? [], listOrder.explorer));
+	const threads = $derived(orderThreads(data.projects.find((p) => p.slug === project.slug)?.threads ?? [], listOrder.order));
 
 	let editing = $state(false);
 	let draft = $state('');

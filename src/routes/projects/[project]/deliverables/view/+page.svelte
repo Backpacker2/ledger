@@ -11,7 +11,7 @@
 	import { deliverableFile, deliverableUrl, formatSize, nextVersion, snapshotPath } from '$lib/actions';
 	import { ago, dateTime } from '$lib/format';
 	import { MMM } from '$lib/mmm';
-	import { orderFeedback, versionsNewestFirst } from '$lib/order';
+	import { orderFeedback, orderVersions } from '$lib/order';
 	import { listOrder } from '$lib/order.svelte';
 	import { attempt, confirmDialog, refresh, toast } from '$lib/ui.svelte';
 	import type { Bump, MmmLevel } from '$lib/types';
@@ -227,7 +227,10 @@
 
 	const openCount = $derived(doc.feedback.filter((f) => f.status === 'open').length);
 	// Only how the list is read changes (see Settings); `doc.feedback` stays oldest first.
-	const feedbackList = $derived(orderFeedback(doc.feedback, listOrder.feedback));
+	// "Live" is the newest of all: first when newest reads first, last when oldest does.
+	const showLive = $derived(!!doc.basePath && (doc.exists || !snapshot));
+	const orderedVersions = $derived(orderVersions(doc.versions, listOrder.order));
+	const feedbackList = $derived(orderFeedback(doc.feedback, listOrder.order));
 </script>
 
 <svelte:head><title>{doc.name} · Ledger</title></svelte:head>
@@ -273,17 +276,17 @@
 	<div class="subline" style="padding-bottom:12px">
 		<span>Versions:</span>
 		<div class="version-strip">
-			{#if doc.basePath}
-				{#if doc.exists || !snapshot}
-					<a class="vchip" class:on={!snapshot} href={deliverableUrl(project, doc.basePath)}>Live</a>
-				{/if}
-			{/if}
-			<!-- Live first, then the newest version; `doc.versions` itself stays oldest first, which "latest" relies on. -->
-			{#each versionsNewestFirst(doc.versions) as v (v)}
+			{#snippet liveChip()}
+				<a class="vchip" class:on={!snapshot} href={deliverableUrl(project, doc.basePath)}>Live</a>
+			{/snippet}
+			{#if showLive && listOrder.order === 'desc'}{@render liveChip()}{/if}
+			<!-- `doc.versions` itself stays oldest first, which "latest" relies on; only the chips follow the setting. -->
+			{#each orderedVersions as v (v)}
 				<a class="vchip" class:on={doc.version === v} href={deliverableUrl(project, snapshotPath(doc.basePath, v))}>v{v}</a>
 			{:else}
 				<span class="hint">none published yet</span>
 			{/each}
+			{#if showLive && listOrder.order === 'asc'}{@render liveChip()}{/if}
 		</div>
 	</div>
 </div>

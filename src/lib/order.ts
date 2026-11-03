@@ -51,5 +51,19 @@ function compareVersions(a: string, b: string): number {
 	return aMajor - bMajor || aMinor - bMinor || cmp(a, b);
 }
 
-/** Published versions, newest first, for showing next to "Live". The list itself stays oldest first. */
-export const versionsNewestFirst = (versions: readonly string[]): string[] => [...versions].sort((a, b) => compareVersions(b, a));
+/** Published versions in the chosen order, for showing next to "Live". The list itself stays oldest first. */
+export const orderVersions = (versions: readonly string[], order: Order): string[] =>
+	[...versions].sort((a, b) => (order === 'asc' ? compareVersions(a, b) : compareVersions(b, a)));
+
+/**
+ * The "Produced by" window: a deliverable's threads, and what happened in each. The backend sends them oldest first
+ * (threads by when the file first showed up in them, and the entries of a thread by when they happened); newest first is
+ * that list turned over, threads and the entries in them alike, so ties mirror too. What is filed under no thread is a
+ * catch-all rather than a point in time, so it stays last either way.
+ */
+export function orderProvenance<G extends { thread: unknown; entries: readonly unknown[] }>(groups: readonly G[], order: Order): G[] {
+	if (order === 'asc') return [...groups];
+	const turned = (group: G): G => ({ ...group, entries: [...group.entries].reverse() });
+	const filed = groups.filter((g) => g.thread !== null).reverse();
+	return [...filed, ...groups.filter((g) => g.thread === null)].map(turned);
+}

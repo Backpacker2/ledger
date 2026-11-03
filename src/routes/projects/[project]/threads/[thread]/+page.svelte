@@ -77,7 +77,7 @@
 
 	/** The same entries read the way Settings says (oldest or newest first), each day under its own heading. */
 	const flow = $derived.by(() => {
-		const entries = orderFlow(chronological, listOrder.posts);
+		const entries = orderFlow(chronological, listOrder.order);
 		return entries.map((entry, i) => ({
 			entry,
 			day: dayKey(entry.at),
@@ -111,7 +111,7 @@
 	}
 
 	// The newest item is at the bottom when posts read oldest first, and at the top when they read newest first.
-	const toNewest = () => scroller && (scroller.scrollTop = listOrder.posts === 'asc' ? scroller.scrollHeight : 0);
+	const toNewest = () => scroller && (scroller.scrollTop = listOrder.order === 'asc' ? scroller.scrollHeight : 0);
 
 	// Arriving in a thread lands on the item a search hit (or a fresh screenshot) pointed at, or else the
 	// newest one; a new item scrolls itself into view.
