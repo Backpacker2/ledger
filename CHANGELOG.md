@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.0 (2026-11-03)
+
+### Features
+
+- **updates:** install new releases from inside the app ([485fd0e](https://github.com/openledger-nl/ledger/commit/485fd0ef02dcb863dbf0789a7908724088254ada))
+- **deliverables:** switch between source, live preview and reading, as in Obsidian ([d9a19d1](https://github.com/openledger-nl/ledger/commit/d9a19d18a0b6978b9b8cef80f94f42cdcc0008e7))
+- **deliverables:** write a version's changelog in the markdown editor ([c9132c8](https://github.com/openledger-nl/ledger/commit/c9132c8b1a948b96eb36cb67353799f2fbf1ede8))
+- **ui:** write markdown in an inline CodeMirror editor everywhere ([8adcbf4](https://github.com/openledger-nl/ledger/commit/8adcbf4ceade87e554cec49adaf15419c02a325f))
+
+### Fixes
+
+- **ui:** draw tables in the live preview and show pictures from the vault ([4d03d83](https://github.com/openledger-nl/ledger/commit/4d03d83a186f15714329ad32af760647ed1df811))
+
+### Other changes
+
+- push the release commit with a deploy key so the main ruleset lets it through ([e81017a](https://github.com/openledger-nl/ledger/commit/e81017a132cbd737de9f4d1c7f4cf43eb4240d93))
+- check that every commit in a pull request is conventional ([e2e7df8](https://github.com/openledger-nl/ledger/commit/e2e7df8ada8581e907e3c23fdffd3565378e8f22))
+- add a contributing guide ([a548042](https://github.com/openledger-nl/ledger/commit/a548042ec8a72ed5b4ca818e8f96ae30de4e6382))
+
 ## 0.5.0 (2026-11-03)
 
 ### Features
