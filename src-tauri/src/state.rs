@@ -136,3 +136,22 @@ impl App {
         Ok(out)
     }
 }
+
+/// The `App` a command works on. Inside the desktop app Tauri hands it over like `State<App>`; the headless server
+/// (`server.rs`, for the mobile version) builds it from its own `App`, so both call the very same commands.
+#[derive(Clone, Copy)]
+pub struct AppRef<'r>(pub &'r App);
+
+impl std::ops::Deref for AppRef<'_> {
+    type Target = App;
+    fn deref(&self) -> &App {
+        self.0
+    }
+}
+
+impl<'r, 'de: 'r, R: tauri::Runtime> tauri::ipc::CommandArg<'de, R> for AppRef<'r> {
+    fn from_command(command: tauri::ipc::CommandItem<'de, R>) -> std::result::Result<Self, tauri::ipc::InvokeError> {
+        let state: tauri::State<'r, App> = tauri::ipc::CommandArg::from_command(command)?;
+        Ok(AppRef(state.inner()))
+    }
+}
