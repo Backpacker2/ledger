@@ -33,6 +33,8 @@ projects/<project>/userstories/<id>.md              a user story
 projects/<project>/tasks/<id>.md                    a task (a card on the board)
 projects/<project>/deliverables/                    what prompts produce — any kind of file;
                                                     published versions are tagged name@v0.1.ext
+projects/<project>/versions/<id>.md                 how a published version came to be: who made it, the thread, prompt
+                                                    and run behind it, its AI-use label
 projects/<project>/attachments/                     files uploaded to a thread, screenshots included
 projects/<project>/templates/<id>.md                templates for this project
 templates/<id>.md                                   templates for every project
@@ -61,7 +63,8 @@ Use a [fine-grained token](https://github.com/settings/personal-access-tokens/ne
 - **Projects** — each has a reading guide (its `README.md`, rendered and editable on the overview), threads, deliverables, user stories, a board and templates. Deleting a project removes its folder.
 - **Threads** — one per topic you're juggling. A timeline of markdown posts (replies quote their parent; edit and delete), prompts, feedback and uploads, grouped by day. Threads can be linked to each other, in both directions, and to user stories.
 - **Prompts** — a request for a deliverable, written in a thread. Started from a **template**, its guiding questions are added to the thread as posts to answer first (a one-time snapshot), and replies to a question are shown inside its card. A prompt can create a deliverable (starting from the template's skeleton) or link existing ones.
-- **Deliverables** — files in the project's `deliverables/`. Markdown ones are edited in the app (write / split / preview, autosave); any other kind opens with the system's program. **Publish** a version (minor, major or a custom `M.m`) to freeze an immutable copy named `name@v0.1.ext`, which also drops a note in the thread of the prompt that produced it. Each deliverable lists the prompts that produced it and the feedback on it.
+- **Deliverables** — files in the project's `deliverables/`. Markdown ones are edited in the app (write / split / preview, autosave); any other kind opens with the system's program. **Publish** a version (minor, major or a custom `M.m`) to freeze an immutable copy named `name@v0.1.ext`, which also drops a note in the thread of the prompt that produced it. Each deliverable has a **Produced by** window beside it (see below) and lists the feedback on it.
+- **Produced by, and AI use** — every published version records who made the change: you (you typed it), Claude Code (a run started from the app, which also links the version to its prompt), or AI you say you used elsewhere. The **Produced by** window on the right of a deliverable lists its threads, oldest first, and under each thread what happened there in order: the prompt that asked for the file, the run, each version with who made it, its size and a SHA-256, and the feedback on it. The "version published" note in a thread links to the prompt that caused the version. When you publish, a checkbox says the change was made with generative AI (it starts ticked when a Claude Code run changed the file and nothing published it), and you can attach a label from the [Me & My Machine](https://mmmlabel.tech) scheme — Lazy Prompter, Piggybacker, Cyborg, Handyman or Man-Made. Ledger records the facts; the label is yours to declare, per version, because it describes the product as it stands then. Versions published before this existed show what the runs and notes prove (versions a run published are known to be AI) and otherwise "origin not recorded"; **Details** has a button to mark them. The records are plain files, so they can be edited by hand.
 - **Feedback** — written in a thread, landing on a deliverable or on one of its published versions; open or resolved.
 - **Uploads** — pick files in a thread (they are copied into the project's `attachments/` and noted in an `uploads/<id>.md` manifest with a description). Screenshots land the same way.
 - **Templates** — a name, a "use when…" hint, guiding questions and the skeleton of the deliverable. Global ones (sidebar → Templates) serve every project; a project can *customise* one, which copies it into the project, where it replaces the shared one.
@@ -166,6 +169,7 @@ scripts/release.mjs      the next version from the conventional commits (run by 
 src-tauri/src/
   schema.sql             the in-memory database's shape and rules
   projects.rs threads.rs posts.rs prompts.rs feedback.rs uploads.rs deliverables.rs templates.rs
+  provenance.rs          how published versions came to be: the records, what old versions prove, the "Produced by" window
   stories.rs board.rs search.rs
                          one store per concern, plain functions over the in-memory connection
   vault.rs frontmatter.rs   files ⇄ database: layout, lenient import, canonical export, write-through

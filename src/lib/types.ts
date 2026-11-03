@@ -53,6 +53,10 @@ export interface Post {
 	versionPublished: boolean;
 	deliverablePath: string | null;
 	deliverableVersion: string | null;
+	/** On a "version published" note: the prompt that caused the version, and its name and thread while it still exists. */
+	promptId: string | null;
+	promptTitle: string | null;
+	promptThread: string | null;
 	createdAt: string;
 	updatedAt: string;
 	body: string;
@@ -147,6 +151,8 @@ export interface DeliverableSummary {
 	versions: string[];
 	promptCount: number;
 	openFeedback: number;
+	/** The AI-use label of the newest version that has one. */
+	mmm: MmmLevel | null;
 }
 
 export interface DeliverablePrompt {
@@ -172,6 +178,114 @@ export interface Deliverable {
 	editable: boolean;
 	prompts: DeliverablePrompt[];
 	feedback: Feedback[];
+}
+
+// ---- how versions came to be ------------------------------------------------------------------------
+
+/** The five AI-use (MMM) levels, from the most AI to the least. */
+export type MmmLevel = 'lazy-prompter' | 'piggybacker' | 'cyborg' | 'handyman' | 'man-made';
+
+export interface PromptRef {
+	id: string;
+	title: string;
+	threadSlug: string;
+	/** Whether the prompt is still there. */
+	exists: boolean;
+}
+
+export interface RunSummary {
+	id: string;
+	promptId: string;
+	promptTitle: string;
+	threadSlug: string;
+	status: 'finished' | 'failed' | 'cancelled';
+	model: string;
+	permissionMode: string;
+	startedAt: string;
+	finishedAt: string;
+	seconds: number;
+	turns: number | null;
+}
+
+export interface ProvenanceVersion {
+	kind: 'version';
+	version: string;
+	/** The snapshot, relative to the deliverables folder. */
+	path: string;
+	at: string;
+	by: 'ai' | 'human' | 'unknown';
+	prompt: PromptRef | null;
+	run: RunSummary | null;
+	mmm: MmmLevel | null;
+	note: string;
+	size: number;
+	sizeChange: number | null;
+	sha256: string | null;
+	/** The id of the record file in the vault (`versions/<id>.md`), when there is one. */
+	record: string | null;
+	/** The "version published" note, in its thread. */
+	post: { threadSlug: string; id: string } | null;
+}
+
+export type ProvenanceEntry =
+	| { kind: 'prompt'; id: string; title: string; at: string }
+	| ({ kind: 'run'; version: string | null; at: string } & RunSummary)
+	| ProvenanceVersion
+	| { kind: 'feedback'; id: string; status: 'open' | 'resolved'; version: string | null; excerpt: string; at: string };
+
+export interface ProvenanceGroup {
+	/** Null for what is filed under no thread. */
+	thread: { slug: string; title: string; exists: boolean } | null;
+	firstAt: string;
+	lastAt: string;
+	entries: ProvenanceEntry[];
+}
+
+/** A run that changed the live file and is in no version. */
+export interface StoppedRun {
+	id: string;
+	promptId: string;
+	promptTitle: string;
+	threadSlug: string;
+	status: string;
+	finishedAt: string;
+}
+
+export interface Provenance {
+	groups: ProvenanceGroup[];
+	summary: {
+		versions: number;
+		ai: number;
+		human: number;
+		unrecorded: number;
+		/** The label of the newest version that has one. */
+		label: { level: MmmLevel; version: string } | null;
+	};
+	/** The live file when it holds something no version does. */
+	draft: { since: string | null; modified: string; stoppedRun: StoppedRun | null } | null;
+	/** Where a publish goes when the person does not say. */
+	defaultThread: string | null;
+	stoppedRun: StoppedRun | null;
+	historyHasAi: boolean;
+	/** The label of the newest labelled version: where the next one starts from. */
+	suggestedLabel: MmmLevel | null;
+}
+
+/** What the person says about a version when publishing it. `thread`: null picks the default, "" files it in no thread. */
+export interface PublishChoices {
+	thread: string | null;
+	ai: boolean;
+	mmm: MmmLevel | null;
+	prompt: string | null;
+	run: string | null;
+	note: string | null;
+}
+
+/** Only what is present changes. `mmm`: "" removes the label. */
+export interface VersionUpdate {
+	by?: 'ai' | 'human';
+	mmm?: MmmLevel | '';
+	note?: string;
 }
 
 // ---- templates --------------------------------------------------------------------------------------

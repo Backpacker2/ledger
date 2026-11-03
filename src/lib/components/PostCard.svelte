@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { api } from '$lib/api';
-	import { deliverableUrl, snapshotPath } from '$lib/actions';
+	import { deliverableUrl, snapshotPath, threadUrl } from '$lib/actions';
 	import { dayKey, dayLabel, plainText, time } from '$lib/format';
 	import { attempt, confirmDialog, refresh } from '$lib/ui.svelte';
 	import type { Post } from '$lib/types';
@@ -119,6 +119,19 @@
 	{:else}
 		<Markdown {html} />
 		{@render children?.()}
+		{#if post.versionPublished && post.promptId}
+			<div class="note-from">
+				{#if post.promptTitle !== null && post.promptThread}
+					{#if post.promptThread === thread}
+						<button class="link accent" onclick={() => onjump(`pr-${post.promptId}`)}>From prompt: {post.promptTitle}</button>
+					{:else}
+						<a class="link accent" href="{threadUrl(project, post.promptThread)}?item=pr-{post.promptId}">From prompt: {post.promptTitle}</a>
+					{/if}
+				{:else}
+					<span class="hint">From a prompt that has since been deleted</span>
+				{/if}
+			</div>
+		{/if}
 		<div class="actions">
 			<button class="link accent" onclick={() => onreply(post)}>{post.guidingQuestion ? 'Answer' : 'Reply'}</button>
 			{#if post.versionPublished && post.deliverablePath && post.deliverableVersion}

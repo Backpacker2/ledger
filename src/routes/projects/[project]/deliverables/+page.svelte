@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import MmmBadge from '$lib/components/MmmBadge.svelte';
 	import { api } from '$lib/api';
 	import { deliverableUrl, formatSize, snapshotPath } from '$lib/actions';
 	import { ago, plural } from '$lib/format';
@@ -88,6 +89,7 @@
 								{:else}
 									<span class="badge draft">Draft</span>
 								{/if}
+								{#if d.mmm}<MmmBadge level={d.mmm} />{/if}
 								{#if !d.exists}<span class="badge">live file removed</span>{/if}
 								{#if d.openFeedback}<span class="badge draft">{d.openFeedback} open</span>{/if}
 							</span>

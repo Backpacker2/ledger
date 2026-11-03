@@ -11,6 +11,8 @@ import type {
 	ProjectSummary,
 	ProjectView,
 	Prompt,
+	Provenance,
+	PublishChoices,
 	Region,
 	ScreenshotTaken,
 	SearchHit,
@@ -24,7 +26,8 @@ import type {
 	Template,
 	ThreadSummary,
 	ThreadView,
-	Upload
+	Upload,
+	VersionUpdate
 } from './types';
 
 /** Commands reject with a plain message; surface it as an `Error` so callers can `catch (e)` uniformly. */
@@ -103,8 +106,13 @@ export const api = {
 	getDeliverable: (project: string, path: string) => call<Deliverable>('get_deliverable', { project, path }),
 	createDeliverable: (project: string, name: string, body = '') => call<Deliverable>('create_deliverable', { project, name, body }),
 	saveDeliverable: (project: string, path: string, body: string) => call<Deliverable>('save_deliverable', { project, path, body }),
-	publishDeliverable: (project: string, path: string, bump: Bump, version: string | null = null) =>
-		call<Deliverable>('publish_deliverable', { project, path, bump, version }),
+	publishDeliverable: (project: string, path: string, bump: Bump, version: string | null = null, choices: PublishChoices | null = null) =>
+		call<Deliverable>('publish_deliverable', { project, path, bump, version, choices }),
+	/** How the versions of a deliverable came to be, by thread. `path` is the live file or any of its versions. */
+	getProvenance: (project: string, path: string) => call<Provenance>('get_provenance', { project, path }),
+	/** Says who made a version, or sets its AI-use label or change note. */
+	updateVersionRecord: (project: string, path: string, version: string, update: VersionUpdate) =>
+		call<Provenance>('update_version_record', { project, path, version, update }),
 	deleteDeliverable: (project: string, path: string) => call<void>('delete_deliverable', { project, path }),
 
 	// templates
