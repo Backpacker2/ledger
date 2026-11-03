@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 (2026-11-03)
+
+### Other changes
+
+- set the updater public key ([efa944e](https://github.com/openledger-nl/ledger/commit/efa944e58ea5fe5dad850c98a31760265beaf814))
+- sign updates with a key that has no password ([dafb6be](https://github.com/openledger-nl/ledger/commit/dafb6be5869d60b722f0473487b2e0221a0dfd88))
+
 ## 0.7.0 (2026-11-03)
 
 ### Features
