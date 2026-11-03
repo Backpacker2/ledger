@@ -10,9 +10,9 @@
 # stays a draft: re-run the failed jobs (the run's page → Re-run failed jobs) to finish it, or delete the draft. Don't
 # publish a draft by hand; the publish job checks that latest.json is complete first.
 #
-# Signing the updater files takes the repository secrets TAURI_SIGNING_PRIVATE_KEY and
-# TAURI_SIGNING_PRIVATE_KEY_PASSWORD (from `pnpm tauri signer generate`); the matching public key is in
-# src-tauri/tauri.conf.json. Without them the builds fail and nothing is published. The installers themselves are not
+# Signing the updater files takes the repository secret TAURI_SIGNING_PRIVATE_KEY (the key file from
+# `pnpm tauri signer generate --password "" --ci`, which makes a key without a password); the matching public key is in
+# src-tauri/tauri.conf.json. Without it the builds fail and nothing is published. The installers themselves are not
 # signed for Windows or macOS (no certificates yet): the README says what people see the first time.
 name: Release
 
@@ -145,7 +145,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: '' # the key has no password
         with:
           releaseId: ${{ needs.release.outputs.release_id }}
           tagName: ${{ needs.release.outputs.tag }}
