@@ -153,6 +153,9 @@ Commits that aren't conventional are left out; with none that count, there is no
 notes go to [CHANGELOG.md](CHANGELOG.md), and CI commits that as `chore(release): vX.Y.Z`, tags it `vX.Y.Z` and
 publishes a GitHub release. Don't bump versions by hand.
 
+`main` only takes pull requests (the `protected-main` ruleset), so CI pushes that release commit and tag with a deploy
+key the ruleset lets through: the write key whose private half is the Actions secret `RELEASE_DEPLOY_KEY`.
+
 ```bash
 pnpm release:preview   # what the next release would be, and its notes; changes nothing
 ```

@@ -18,8 +18,8 @@ permissions:
 
 jobs:
   release:
-    # The release commit itself must not start another release. (Pushes made with GITHUB_TOKEN don't start
-    # workflows anyway; this keeps it so if the push is ever made with another token.)
+    # The release commit itself must not start another release: a push with the deploy key below starts workflows,
+    # unlike one with GITHUB_TOKEN.
     if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
     runs-on: ubuntu-latest
     steps:
@@ -27,6 +27,9 @@ jobs:
         with:
           ref: main # the newest main, so a queued run includes what was pushed after it was started
           fetch-depth: 0 # the whole history and its tags, to find the last release
+          # The ruleset on main lets deploy keys push past it and GITHUB_TOKEN not, so the release commit and tag go
+          # out with this write key. Without the secret, checkout falls back to GITHUB_TOKEN.
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - uses: actions/setup-node@v4
         with:
