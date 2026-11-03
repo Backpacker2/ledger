@@ -195,9 +195,12 @@ fn run_once(core: &Arc<Mutex<Core>>, status: &Mutex<SyncStatus>, emit: &Emit) ->
             update(status, emit, |s| {
                 s.state = "idle".into();
                 s.pending = false;
-                s.last_error = None;
+                if s.last_error.take().is_some() {
+                    crate::applog::info("sync", "Syncing works again");
+                }
                 s.last_sync_at = Some(ids::now());
                 s.summary = Some(outcome.summary());
+                crate::applog::debug("sync", format!("Round done: {}", s.summary.as_deref().unwrap_or("no summary")));
             });
             if outcome.changed_local() {
                 emit(Event::VaultChanged);
@@ -207,7 +210,12 @@ fn run_once(core: &Arc<Mutex<Core>>, status: &Mutex<SyncStatus>, emit: &Emit) ->
         Err(e) => {
             update(status, emit, |s| {
                 s.state = "error".into();
-                s.last_error = Some(e.to_string());
+                let message = e.to_string();
+                // A sync that keeps failing the same way is logged once, not every few minutes.
+                if s.last_error.as_deref() != Some(message.as_str()) {
+                    crate::applog::error("sync", &message);
+                }
+                s.last_error = Some(message);
             });
             false
         }

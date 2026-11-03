@@ -39,6 +39,9 @@ pub struct AppConfig {
     /// whole file unreadable, which would also lose the vault's location.
     #[serde(deserialize_with = "lenient")]
     pub updates: UpdateConfig,
+    /// The most the app's log may take on disk; unset means `applog::DEFAULT_MAX_BYTES`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_max_bytes: Option<u64>,
 }
 
 fn lenient<'de, D: serde::Deserializer<'de>, T: serde::de::DeserializeOwned + Default>(deserializer: D) -> std::result::Result<T, D::Error> {
@@ -62,6 +65,21 @@ impl Default for UpdateConfig {
 
 fn config_file(dir: &Path) -> PathBuf {
     dir.join("config.json")
+}
+
+/// The identifier Ledger had before `nl.openledger.ledger`; its config folder sits next to the current one.
+pub const OLD_IDENTIFIER: &str = "nl.molenbrugge.ledger";
+
+/// Brings the app's config over from the folder of an older identifier, once: when `dir` has none yet and the old
+/// folder next to it has one. Without it, a vault moved away from the default would be forgotten. Returns whether
+/// it was copied.
+pub fn adopt_old_config(dir: &Path, old_identifier: &str) -> bool {
+    let new_file = config_file(dir);
+    let Some(old_file) = dir.parent().map(|parent| config_file(&parent.join(old_identifier))) else { return false };
+    if new_file.exists() || !old_file.is_file() {
+        return false;
+    }
+    fs::create_dir_all(dir).is_ok() && fs::copy(&old_file, &new_file).is_ok()
 }
 
 pub fn load_config(dir: &Path) -> AppConfig {

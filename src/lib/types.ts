@@ -746,3 +746,37 @@ export interface UpdateProgress {
 	downloaded: number;
 	total: number | null;
 }
+
+// ---- the app's log ----------------------------------------------------------------------------------
+
+/** `debug` entries are only kept in a debug capture. */
+export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
+
+/** A line of the app's log: an error, or something worth knowing when one happens. */
+export interface LogEntry {
+	at: string;
+	level: LogLevel;
+	/** What it came from: sync, trello, app, panic, ui, or the command that failed. */
+	source: string;
+	message: string;
+}
+
+/** This build, this machine and where things are kept, for the About screen and for reports. */
+export interface AboutInfo {
+	version: string;
+	tauriVersion: string;
+	os: string;
+	arch: string;
+	logFile: string;
+	/** The most the log may take on disk, in bytes. */
+	logMaxBytes: number;
+	configDir: string;
+	homeDir: string;
+}
+
+/** Whether a debug capture runs, since when, and how much it has recorded. */
+export interface CaptureStatus {
+	active: boolean;
+	startedAt: string | null;
+	events: number;
+}

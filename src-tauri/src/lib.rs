@@ -1,4 +1,5 @@
 mod activity;
+mod applog;
 mod board;
 mod claude_code;
 mod commands;
@@ -42,6 +43,8 @@ mod trello_sync;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_applog;
 #[cfg(test)]
 mod tests_claude_code;
 #[cfg(test)]
@@ -91,6 +94,23 @@ pub fn run() {
                 Some(dir) => dir.into(),
                 None => app.path().app_config_dir()?,
             };
+            // The log first, so whatever goes wrong from here on is in it. LEDGER_CONFIG_DIR moves it along.
+            let log_dir = match std::env::var_os("LEDGER_CONFIG_DIR") {
+                Some(_) => config_dir.join("logs"),
+                None => app.path().app_log_dir()?,
+            };
+            let log_handle = app.handle().clone();
+            applog::init(
+                &log_dir,
+                settings::load_config(&config_dir).log_max_bytes.unwrap_or(applog::DEFAULT_MAX_BYTES),
+                Box::new(move |entry| {
+                    let _ = log_handle.emit("log-entry", entry);
+                }),
+            );
+            applog::info("app", format!("Ledger {} started on {} {}", env!("CARGO_PKG_VERSION"), std::env::consts::OS, std::env::consts::ARCH));
+            if std::env::var_os("LEDGER_CONFIG_DIR").is_none() && settings::adopt_old_config(&config_dir, settings::OLD_IDENTIFIER) {
+                applog::info("app", format!("Brought the settings over from the {} folder", settings::OLD_IDENTIFIER));
+            }
             let core = state::Core::open(config_dir.clone(), app.path().document_dir().ok())?;
             let sync = core.sync.clone();
             let core = Arc::new(Mutex::new(core));
@@ -193,6 +213,16 @@ pub fn run() {
             commands::generate_encryption_key,
             commands::import_encryption_key,
             commands::export_recovery_key,
+            applog::about_info,
+            applog::log_write,
+            applog::log_read,
+            applog::log_clear,
+            applog::log_set_max_bytes,
+            applog::capture_status,
+            applog::capture_start,
+            applog::capture_debug,
+            applog::capture_stop,
+            applog::capture_save,
             // ---- Trello sync (feat/trello-sync) ----
             trello::trello_get,
             trello::trello_status,

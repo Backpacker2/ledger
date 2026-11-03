@@ -1,4 +1,4 @@
-import { api } from '$lib/api';
-import type { PageLoad } from './$types';
+import { redirect } from '@sveltejs/kit';
 
-export const load: PageLoad = async () => ({ settings: await api.getSettings() });
+// Settings has no page of its own: it opens on its first group.
+export const load = () => redirect(307, '/settings/features');
