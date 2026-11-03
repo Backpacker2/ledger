@@ -3,10 +3,10 @@ use rusqlite::{Connection, Row, params};
 use crate::db::{query_all, query_opt};
 use crate::error::{Error, Result};
 use crate::models::PostView;
-use crate::{ids, markdown, threads};
+use crate::{ids, markdown, prompts, threads};
 
 const COLUMNS: &str =
-    "id, parent_id, guiding_question, version_published, deliverable_path, deliverable_version, created_at, updated_at, body";
+    "id, parent_id, guiding_question, version_published, deliverable_path, deliverable_version, prompt_id, created_at, updated_at, body";
 
 #[derive(Debug, Default)]
 pub struct AddOptions {
@@ -15,10 +15,12 @@ pub struct AddOptions {
     pub version_published: bool,
     pub deliverable_path: Option<String>,
     pub deliverable_version: Option<String>,
+    /// The prompt that caused the version a "version published" note announces.
+    pub prompt_id: Option<String>,
 }
 
 fn from_row(r: &Row<'_>) -> rusqlite::Result<PostView> {
-    let body: String = r.get(8)?;
+    let body: String = r.get(9)?;
     Ok(PostView {
         id: r.get(0)?,
         parent_id: r.get(1)?,
@@ -26,31 +28,43 @@ fn from_row(r: &Row<'_>) -> rusqlite::Result<PostView> {
         version_published: r.get(3)?,
         deliverable_path: r.get(4)?,
         deliverable_version: r.get(5)?,
-        created_at: r.get(6)?,
-        updated_at: r.get(7)?,
+        prompt_id: r.get(6)?,
+        prompt_title: None,
+        created_at: r.get(7)?,
+        updated_at: r.get(8)?,
         html: markdown::render(&body),
         body,
     })
 }
 
+/// Names the prompt a note points at, when it still exists.
+fn complete(conn: &Connection, project: &str, mut post: PostView) -> Result<PostView> {
+    if let Some(id) = &post.prompt_id {
+        post.prompt_title = prompts::display_title_of(conn, project, id)?;
+    }
+    Ok(post)
+}
+
 /// Oldest first. Posts created in the same millisecond keep the order they were inserted in.
 pub fn list(conn: &Connection, project: &str, thread: &str) -> Result<Vec<PostView>> {
-    query_all(
+    let rows = query_all(
         conn,
         &format!("SELECT {COLUMNS} FROM posts WHERE project_slug = ?1 AND thread_slug = ?2 ORDER BY created_at, rowid"),
         [project, thread],
         from_row,
-    )
+    )?;
+    rows.into_iter().map(|p| complete(conn, project, p)).collect()
 }
 
 fn get(conn: &Connection, project: &str, thread: &str, id: &str) -> Result<PostView> {
-    query_opt(
+    let post = query_opt(
         conn,
         &format!("SELECT {COLUMNS} FROM posts WHERE project_slug = ?1 AND thread_slug = ?2 AND id = ?3"),
         [project, thread, id],
         from_row,
     )?
-    .ok_or_else(|| Error::not_found("Post not found"))
+    .ok_or_else(|| Error::not_found("Post not found"))?;
+    complete(conn, project, post)
 }
 
 pub fn add(conn: &Connection, project: &str, thread: &str, body: &str, options: AddOptions) -> Result<PostView> {
@@ -79,8 +93,8 @@ pub fn add(conn: &Connection, project: &str, thread: &str, body: &str, options: 
     let ids::Stamp { id, at: now } = ids::new_stamp();
     conn.execute(
         "INSERT INTO posts (id, project_slug, thread_slug, parent_id, guiding_question, version_published,
-                            deliverable_path, deliverable_version, created_at, updated_at, body)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10)",
+                            deliverable_path, deliverable_version, prompt_id, created_at, updated_at, body)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?11)",
         params![
             id,
             project,
@@ -90,6 +104,7 @@ pub fn add(conn: &Connection, project: &str, thread: &str, body: &str, options: 
             options.version_published,
             options.deliverable_path,
             options.deliverable_version,
+            options.prompt_id,
             now,
             body
         ],

@@ -7,6 +7,7 @@ use super::records::{self, RunRecord};
 use super::runs::VaultOutcome;
 use super::versions::Change;
 use crate::error::Result;
+use crate::provenance::{self, Origin};
 use crate::state::Core;
 use crate::{deliverables, prompts};
 
@@ -41,7 +42,10 @@ pub fn refresh_vault(core: &mut Core, request: &RunRequest, changes: &[Change], 
     for change in changes.iter().take(MAX_CHANGES) {
         let base = change.path();
         if let Some(held) = change.held() {
-            match deliverables::publish_run(&core.conn, &root, &request.project, base, Some(held), &request.thread) {
+            // Edits that came from an earlier run that was stopped (and so published nothing) are that run's, not the person's.
+            let stopped = provenance::stopped_run(&core.conn, &request.project, base).ok().flatten();
+            let origin = Origin::held(&request.thread, &request.prompt_id, stopped.as_ref());
+            match deliverables::publish_run(&core.conn, &root, &request.project, base, Some(held), &origin) {
                 Ok(version) => {
                     outcome.kept.push(deliverables::snapshot_path(base, &version));
                     published = true;
@@ -56,7 +60,9 @@ pub fn refresh_vault(core: &mut Core, request: &RunRequest, changes: &[Change], 
         if !link {
             continue;
         }
-        let version = match deliverables::publish_run(&core.conn, &root, &request.project, base, None, &request.thread) {
+        let run_id = Some(request.run_id.as_str()).filter(|id| !id.is_empty());
+        let origin = Origin::run(&request.thread, &request.prompt_id, run_id);
+        let version = match deliverables::publish_run(&core.conn, &root, &request.project, base, None, &origin) {
             Ok(version) => version,
             Err(e) => {
                 outcome.error = Some(format!("{base} couldn't be published: {e}"));

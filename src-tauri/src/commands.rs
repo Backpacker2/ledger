@@ -19,7 +19,7 @@ use crate::screenshot::{self, Region, ScreenshotSettings};
 use crate::settings::{self, SyncConfig, SyncEnv};
 use crate::state::App;
 use crate::syncer::SyncStatus;
-use crate::{board, deliverables, feedback, markdown, posts, projects, prompts, search, stories, templates, threads, uploads};
+use crate::{board, deliverables, feedback, markdown, posts, projects, prompts, provenance, search, stories, templates, threads, uploads};
 
 #[tauri::command]
 pub fn render_markdown(body: String) -> String {
@@ -275,8 +275,33 @@ pub fn save_deliverable(app: State<App>, project: String, path: String, body: St
 }
 
 #[tauri::command]
-pub fn publish_deliverable(app: State<App>, project: String, path: String, bump: Option<Bump>, version: Option<String>) -> Result<DeliverableView> {
-    app.mutate(|c, root| deliverables::publish(c, root, &project, &path, bump.unwrap_or_default(), version.as_deref()))
+pub fn publish_deliverable(
+    app: State<App>,
+    project: String,
+    path: String,
+    bump: Option<Bump>,
+    version: Option<String>,
+    choices: Option<PublishChoices>,
+) -> Result<DeliverableView> {
+    app.mutate(|c, root| {
+        deliverables::publish_with(c, root, &project, &path, bump.unwrap_or_default(), version.as_deref(), &choices.unwrap_or_default())
+    })
+}
+
+/// How the versions of a deliverable came to be, by thread. `path` is the live file or any of its versions.
+#[tauri::command]
+pub fn get_provenance(app: State<App>, project: String, path: String) -> Result<provenance::Provenance> {
+    app.read(|c, _| provenance::for_deliverable(c, &project, &deliverables::split_version(&path).0))
+}
+
+/// Says who made a version, or sets its AI-use label or change note.
+#[tauri::command]
+pub fn update_version_record(app: State<App>, project: String, path: String, version: String, update: VersionUpdate) -> Result<provenance::Provenance> {
+    let base = deliverables::split_version(&path).0;
+    app.mutate(|c, _| {
+        provenance::update_record(c, &project, &base, &version, &update)?;
+        provenance::for_deliverable(c, &project, &base)
+    })
 }
 
 #[tauri::command]

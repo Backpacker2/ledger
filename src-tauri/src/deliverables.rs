@@ -12,8 +12,9 @@ use rusqlite::{Connection, params};
 
 use crate::db::{query_all, query_opt};
 use crate::error::{Error, Result};
-use crate::models::{Bump, DeliverableSummary, DeliverableView};
+use crate::models::{Bump, DeliverableSummary, DeliverableView, PublishChoices};
 use crate::posts::{self, AddOptions};
+use crate::provenance::{self, Origin};
 use crate::{feedback, frontmatter, ids, markdown, projects, prompts, uploads};
 
 // ---- paths and versions -----------------------------------------------------------------------------
@@ -269,28 +270,52 @@ pub fn save(conn: &Connection, project: &str, path: &str, body: &str) -> Result<
     get(conn, project, path)
 }
 
-/// Freezes the current file as the next version, and notes it in the thread of the prompt that produced it.
+/// Freezes the current file as the next version, as a person typed it, and notes it in the thread the version is filed
+/// under (see [`provenance::default_thread`]). The page uses [`publish_with`]; this is the publish with every default.
+#[cfg(test)]
 pub fn publish(conn: &Connection, root: &Path, project: &str, path: &str, bump: Bump, explicit: Option<&str>) -> Result<DeliverableView> {
+    publish_with(conn, root, project, path, bump, explicit, &PublishChoices::default())
+}
+
+/// [`publish`], with what the person said about the change: the thread, whether AI made it, its AI-use label.
+pub fn publish_with(
+    conn: &Connection,
+    root: &Path,
+    project: &str,
+    path: &str,
+    bump: Bump,
+    explicit: Option<&str>,
+    choices: &PublishChoices,
+) -> Result<DeliverableView> {
     let (base, version) = split_version(path);
     if version.is_some() {
         return Err(Error::invalid("Publish the current version, not a published one"));
     }
-    let thread = prompts::producing(conn, project, &base)?.first().map(|p| p.thread_slug.clone());
-    freeze(conn, root, project, &base, bump, explicit, None, thread.as_deref())?;
+    let origin = provenance::manual_origin(conn, project, &base, choices)?;
+    freeze(conn, root, project, &base, bump, explicit, None, &origin)?;
     get(conn, project, &base)
 }
 
 /// What a run of a prompt publishes: the next minor version, noted in the prompt's thread. With `held` it is that
 /// content (what the file said before the run changed it) rather than the file as it is now. Returns the version,
 /// like "0.2"; the snapshot is `snapshot_path(base, version)`.
-pub fn publish_run(conn: &Connection, root: &Path, project: &str, base: &str, held: Option<&[u8]>, thread: &str) -> Result<String> {
-    freeze(conn, root, project, base, Bump::Minor, None, held, Some(thread))
+pub fn publish_run(conn: &Connection, root: &Path, project: &str, base: &str, held: Option<&[u8]>, origin: &Origin) -> Result<String> {
+    freeze(conn, root, project, base, Bump::Minor, None, held, origin)
 }
 
-/// Writes the snapshot of the live file at `base` (or of `held`, when given) as the next version, and when `thread` is
-/// given notes it there. Returns the version.
+/// Writes the snapshot of the live file at `base` (or of `held`, when given) as the next version, records how it came to
+/// be, and when the origin has a thread notes it there. Returns the version.
 #[allow(clippy::too_many_arguments)]
-fn freeze(conn: &Connection, root: &Path, project: &str, base: &str, bump: Bump, explicit: Option<&str>, held: Option<&[u8]>, thread: Option<&str>) -> Result<String> {
+fn freeze(
+    conn: &Connection,
+    root: &Path,
+    project: &str,
+    base: &str,
+    bump: Bump,
+    explicit: Option<&str>,
+    held: Option<&[u8]>,
+    origin: &Origin,
+) -> Result<String> {
     let live = get(conn, project, base)?;
 
     let existing = live.versions.clone();
@@ -307,12 +332,14 @@ fn freeze(conn: &Connection, root: &Path, project: &str, base: &str, bump: Bump,
     }
 
     let snapshot = snapshot_path(base, &version);
+    let at = ids::now();
     let tx = conn.unchecked_transaction()?;
-    match &live.body {
+    let sha256 = match &live.body {
         Some(body) => {
             let held_text = held.map(|bytes| String::from_utf8_lossy(bytes).into_owned());
             let text = held_text.as_deref().unwrap_or(body);
-            upsert(&tx, project, &snapshot, text.len() as i64, &ids::now(), Some(text))?;
+            upsert(&tx, project, &snapshot, text.len() as i64, &at, Some(text))?;
+            provenance::sha256_hex(text.as_bytes())
         }
         None => {
             let to = deliverables_dir(root, project).join(&snapshot);
@@ -323,23 +350,26 @@ fn freeze(conn: &Connection, root: &Path, project: &str, base: &str, bump: Bump,
                     fs::copy(&from, &to).map_err(|e| Error::io(&to, e))?;
                 }
             }
-            upsert(&tx, project, &snapshot, held.map_or(live.size, |bytes| bytes.len() as i64), &ids::now(), None)?;
+            upsert(&tx, project, &snapshot, held.map_or(live.size, |bytes| bytes.len() as i64), &at, None)?;
+            provenance::sha256_hex(&fs::read(&to).map_err(|e| Error::io(&to, e))?)
         }
-    }
-    if let Some(thread) = thread {
+    };
+    if let Some(thread) = &origin.thread {
         posts::add(
             &tx,
             project,
             thread,
-            &format!("Version {version} of **{}** was just published.", live.name),
+            &provenance::announcement(&tx, project, &live.name, &version, origin)?,
             AddOptions {
                 version_published: true,
                 deliverable_path: Some(base.to_string()),
                 deliverable_version: Some(version.clone()),
+                prompt_id: origin.prompt.clone(),
                 ..Default::default()
             },
         )?;
     }
+    provenance::insert_record(&tx, project, base, &version, origin, &sha256, &at)?;
     tx.commit()?;
     Ok(version)
 }

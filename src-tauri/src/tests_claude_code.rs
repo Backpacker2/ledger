@@ -29,7 +29,7 @@ use crate::claude_code::{check_with, finish};
 use crate::error::Result;
 use crate::models::Bump;
 use crate::state::Core;
-use crate::{deliverables, projects, prompts, templates, threads};
+use crate::{deliverables, ids, projects, prompts, provenance, templates, threads};
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -1008,6 +1008,7 @@ fn request_in(cwd: &str) -> RunRequest {
         thread: "call".into(),
         prompt_id: "p1".into(),
         prompt_title: "Title".into(),
+        run_id: String::new(),
         cwd: PathBuf::from(cwd),
         text: String::new(),
     }
@@ -1411,7 +1412,8 @@ fn streaming_json_is_shown_as_what_was_said_and_done() {
 /// The part of a run that follows the process: see what changed in the deliverables since `baseline`, and put the
 /// vault in order.
 fn after_run(f: &mut Fixture, baseline: &Baseline, link: bool) -> VaultOutcome {
-    let request = f.request();
+    let mut request = f.request();
+    request.run_id = "run-1".into();
     let changes = baseline.changes(&request.cwd.join("deliverables"));
     finish::refresh_vault(&mut f.core, &request, &changes, link)
 }
@@ -1467,7 +1469,7 @@ fn a_new_file_is_published_as_the_first_version_and_that_version_is_linked() {
     // Each version is noted in the thread, and the deliverable knows the prompt that produced it.
     let posts = version_posts(&f);
     assert_eq!(posts.len(), 2);
-    assert!(posts.iter().any(|p| p.contains("Version 0.1 of **summary.md** was just published.")), "{posts:?}");
+    assert!(posts.iter().any(|p| p.contains("Version 0.1 of **summary.md** was published from the prompt **Call summary**.")), "{posts:?}");
     assert_eq!(deliverables::get(&f.core.conn, &f.project, "summary.md").unwrap().prompts.len(), 1);
     let listed = deliverables::list(&f.core.conn, &f.project).unwrap();
     assert_eq!(listed.iter().find(|d| d.path == "summary.md").unwrap().prompt_count, 1);
@@ -1517,6 +1519,101 @@ fn an_edited_file_with_unpublished_edits_has_them_published_first_and_only_the_r
 
     f.core.reload().unwrap();
     assert!(body_of(&f, "plan@v0.2.md").contains("the person's edit"), "and both are in the vault's files");
+}
+
+#[test]
+fn a_runs_version_is_recorded_as_ai_with_its_prompt_and_run_and_the_note_links_the_prompt() {
+    let mut f = Fixture::new();
+    let dir = deliverables_folder(&f);
+    let baseline = Baseline::capture(&dir);
+    fs::write(dir.join("summary.md"), "# Summary\n\nAna wants SSO.\n").unwrap();
+    fs::write(dir.join("chart.png"), b"\x89PNG").unwrap();
+    after_run(&mut f, &baseline, true);
+
+    for base in ["summary.md", "chart.png"] {
+        let known = provenance::resolve(&f.core.conn, &f.project, base).unwrap();
+        assert_eq!(known.len(), 1);
+        let v = &known[0];
+        assert_eq!((v.author, v.thread.as_deref(), v.prompt.as_deref(), v.run.as_deref()), ("ai", Some(f.thread.as_str()), Some(f.prompt.id.as_str()), Some("run-1")), "{base}");
+        assert!(v.record.is_some() && v.sha256.is_some(), "{base}");
+    }
+    let note = threads::get(&f.core.conn, &f.root(), &f.project, &f.thread).unwrap().posts.into_iter().find(|p| p.body.contains("**summary.md**")).unwrap();
+    assert_eq!((note.prompt_id.as_deref(), note.prompt_title.as_deref()), (Some(f.prompt.id.as_str()), Some("Call summary")));
+
+    // The link is in the vault's files, not only in memory.
+    f.persist();
+    f.core.reload().unwrap();
+    let again = provenance::resolve(&f.core.conn, &f.project, "summary.md").unwrap();
+    assert_eq!((again[0].author, again[0].run.as_deref(), again[0].prompt.as_deref()), ("ai", Some("run-1"), Some(f.prompt.id.as_str())));
+}
+
+#[test]
+fn edits_kept_before_a_run_are_recorded_as_the_persons_and_not_linked_to_the_prompt() {
+    let mut f = Fixture::new();
+    seed_published(&mut f, "plan.md", "# Plan\n\nfirst text\n");
+    let dir = deliverables_folder(&f);
+    fs::write(dir.join("plan.md"), "# Plan\n\nthe person's edit\n").unwrap();
+    let baseline = Baseline::capture(&dir);
+    fs::write(dir.join("plan.md"), "# Plan\n\nthe run's edit\n").unwrap();
+    after_run(&mut f, &baseline, true);
+
+    let known = provenance::resolve(&f.core.conn, &f.project, "plan.md").unwrap();
+    assert_eq!(known.iter().map(|v| (v.version.as_str(), v.author)).collect::<Vec<_>>(), [("0.1", "human"), ("0.2", "human"), ("0.3", "ai")]);
+    assert_eq!((known[1].prompt.as_deref(), known[1].run.as_deref(), known[1].thread.as_deref()), (None, None, Some(f.thread.as_str())));
+    assert_eq!(known[2].run.as_deref(), Some("run-1"));
+    let notes = version_posts(&f);
+    assert!(notes.iter().any(|n| n == "Version 0.2 of **plan.md** keeps your earlier edits, published just before the prompt **Call summary** ran."), "{notes:?}");
+    assert!(notes.iter().any(|n| n == "Version 0.3 of **plan.md** was published from the prompt **Call summary**."), "{notes:?}");
+}
+
+#[test]
+fn what_a_stopped_run_left_in_the_file_is_kept_as_that_runs_when_the_next_run_starts() {
+    let mut f = Fixture::new();
+    seed_published(&mut f, "plan.md", "# Plan\n\nfirst text\n");
+    let dir = deliverables_folder(&f);
+
+    // A run that is stopped halfway: it changed the file, nothing is published, and its note lists the file.
+    let baseline = Baseline::capture(&dir);
+    fs::write(dir.join("plan.md"), "# Plan\n\nhalf of the run's text\n").unwrap();
+    after_run(&mut f, &baseline, false);
+    let at = ids::now();
+    records::insert(
+        &f.core.conn,
+        &RunRecord {
+            id: "run-stopped".into(),
+            project: f.project.clone(),
+            thread: f.thread.clone(),
+            prompt_id: f.prompt.id.clone(),
+            status: "cancelled".into(),
+            model: String::new(),
+            permission_mode: String::new(),
+            started_at: at.clone(),
+            finished_at: at,
+            seconds: 1,
+            turns: None,
+            files: vec!["plan.md".into()],
+            body: "Stopped at your request".into(),
+        },
+    )
+    .unwrap();
+    f.persist();
+    assert_eq!(provenance::stopped_run(&f.core.conn, &f.project, "plan.md").unwrap().map(|r| r.id), Some("run-stopped".to_string()));
+
+    // The next run starts with that text in the file and no version holding it.
+    let baseline = Baseline::capture(&dir);
+    fs::write(dir.join("plan.md"), "# Plan\n\nthe next run's text\n").unwrap();
+    let outcome = after_run(&mut f, &baseline, true);
+    assert_eq!((outcome.kept.as_slice(), outcome.linked.as_slice()), (&["plan@v0.2.md".to_string()][..], &["plan@v0.3.md".to_string()][..]), "{outcome:?}");
+
+    let known = provenance::resolve(&f.core.conn, &f.project, "plan.md").unwrap();
+    assert_eq!((known[1].author, known[1].run.as_deref(), known[1].prompt.as_deref()), ("ai", Some("run-stopped"), Some(f.prompt.id.as_str())), "not the person's");
+    assert_eq!((known[2].author, known[2].run.as_deref()), ("ai", Some("run-1")));
+    assert!(
+        version_posts(&f).iter().any(|n| n == "Version 0.2 of **plan.md** keeps what an earlier run of the prompt **Call summary** left in the file, published just before the prompt **Call summary** ran."),
+        "{:?}",
+        version_posts(&f)
+    );
+    assert!(provenance::stopped_run(&f.core.conn, &f.project, "plan.md").unwrap().is_none(), "newer versions hold it now");
 }
 
 #[test]
