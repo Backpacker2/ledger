@@ -45,7 +45,6 @@ use tokio_stream::wrappers::BroadcastStream;
 use crate::commands;
 use crate::error::{Error, Result};
 use crate::models::*;
-use crate::screenshot::Screenshots;
 use crate::state::{App, AppRef, Core};
 use crate::syncer::{self, Event};
 use crate::{applog, uploads};
@@ -609,7 +608,11 @@ fn run() -> std::result::Result<(), String> {
         }),
     );
     syncer.reconfigure(sync.as_ref());
-    let app = Arc::new(App::new(core, syncer, Screenshots::new()));
+    // Built together with the desktop app (the default features), `App` also holds the screenshots; unused here.
+    #[cfg(feature = "desktop")]
+    let app = Arc::new(App::new(core, syncer, crate::screenshot::Screenshots::new()));
+    #[cfg(not(feature = "desktop"))]
+    let app = Arc::new(App::new(core, syncer));
 
     let shared = Shared {
         app,

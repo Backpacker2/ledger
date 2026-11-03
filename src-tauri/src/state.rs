@@ -8,6 +8,7 @@ use rusqlite::Connection;
 
 use crate::error::{Error, Result};
 use crate::keystore::{EnvFileKeyStore, KeyStore};
+#[cfg(feature = "desktop")]
 use crate::screenshot::Screenshots;
 use crate::settings::{self, SyncConfig};
 use crate::syncer::Syncer;
@@ -101,12 +102,20 @@ fn copy_dir(from: &Path, to: &Path) -> Result<()> {
 pub struct App {
     core: Arc<Mutex<Core>>,
     pub syncer: Syncer,
+    #[cfg(feature = "desktop")]
     pub screenshots: Screenshots,
 }
 
 impl App {
+    #[cfg(feature = "desktop")]
     pub fn new(core: Arc<Mutex<Core>>, syncer: Syncer, screenshots: Screenshots) -> App {
         App { core, syncer, screenshots }
+    }
+
+    /// Without the desktop app (`ledger-server`): no screenshots to hold.
+    #[cfg(not(feature = "desktop"))]
+    pub fn new(core: Arc<Mutex<Core>>, syncer: Syncer) -> App {
+        App { core, syncer }
     }
 
     pub fn lock(&self) -> MutexGuard<'_, Core> {
@@ -132,6 +141,7 @@ impl App {
         // image, an upload), which the write-through doesn't count.
         self.syncer.dirty();
         // The Trello sync (if it is set up) looks at what changed after a pause, like the GitHub sync does.
+        #[cfg(feature = "desktop")]
         crate::trello::notify_vault_changed();
         Ok(out)
     }
@@ -149,6 +159,7 @@ impl std::ops::Deref for AppRef<'_> {
     }
 }
 
+#[cfg(feature = "desktop")]
 impl<'r, 'de: 'r, R: tauri::Runtime> tauri::ipc::CommandArg<'de, R> for AppRef<'r> {
     fn from_command(command: tauri::ipc::CommandItem<'de, R>) -> std::result::Result<Self, tauri::ipc::InvokeError> {
         let state: tauri::State<'r, App> = tauri::ipc::CommandArg::from_command(command)?;

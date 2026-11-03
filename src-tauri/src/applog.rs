@@ -288,7 +288,8 @@ pub struct AboutInfo {
     pub home_dir: String,
 }
 
-#[tauri::command]
+#[cfg(feature = "desktop")]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub fn about_info(app: tauri::AppHandle) -> AboutInfo {
     use tauri::Manager;
     let path = |p: tauri::Result<PathBuf>| p.map(|p| p.display().to_string()).unwrap_or_default();
@@ -304,23 +305,24 @@ pub fn about_info(app: tauri::AppHandle) -> AboutInfo {
     }
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub fn log_write(level: String, source: String, message: String) {
     write(&level, &source, &message);
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub fn log_read(limit: Option<usize>) -> Result<Vec<Entry>> {
     Ok(log()?.read(limit.unwrap_or(500)))
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub fn log_clear() -> Result<()> {
     log()?.clear()
 }
 
 /// Sets the most the log may take on disk, keeps it in this machine's app config, and returns it as set.
-#[tauri::command]
+#[cfg(feature = "desktop")]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub fn log_set_max_bytes(app: tauri::State<crate::state::App>, bytes: u64) -> Result<u64> {
     let max = log()?.set_max_bytes(bytes);
     let config_dir = app.lock().config_dir.clone();
@@ -337,7 +339,7 @@ pub struct CaptureStatus {
     pub events: usize,
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub fn capture_status() -> Result<CaptureStatus> {
     let log = log()?;
     if !log.capturing() {
@@ -347,24 +349,24 @@ pub fn capture_status() -> Result<CaptureStatus> {
     Ok(CaptureStatus { active: true, started_at: entries.first().map(|e| e.at.clone()), events: entries.len() })
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub fn capture_start() -> Result<CaptureStatus> {
     log()?.start_capture()?;
     capture_status()
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub fn capture_debug(source: String, message: String) {
     debug(&source, message);
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub fn capture_stop() -> Result<Vec<Entry>> {
     log()?.stop_capture()
 }
 
 /// Saves the finished capture (the window has taken out what shouldn't be shared) as `ledger-capture-<time>.log`.
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub fn capture_save(text: String) -> Result<String> {
     let name = format!("ledger-capture-{}.log", chrono::Local::now().format("%Y-%m-%d-%H%M%S"));
     Ok(log()?.save_capture(&name, &text)?.display().to_string())
